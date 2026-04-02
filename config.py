@@ -6,6 +6,7 @@ from datetime import datetime
 BOT_TOKEN = os.getenv("BOT_TOKEN", "8788194731:AAGKYQ6ur_aR5sh4INVRqSNNl8f_I3dXLfs")
 MONGO_URL = os.getenv("MONGO_URL", "mongodb://localhost:27017/") # Будет браться с Render
 PORT = int(os.getenv("PORT", 8080))
+ADMIN_ID = int(os.getenv("ADMIN_ID", "0"))
 
 # Часовые пояса и даты марафона
 MOSCOW_TZ = timezone("Europe/Moscow")

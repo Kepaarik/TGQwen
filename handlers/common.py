@@ -38,3 +38,12 @@ async def cancel_action(callback: types.CallbackQuery, state: FSMContext):
     text = await get_personal_wallet_text(callback.from_user.id)
     await callback.message.edit_text(text, reply_markup=get_main_menu(), parse_mode="HTML")
     await callback.answer("Отменено")
+
+@router.callback_query(F.data == "menu_close")
+async def close_menu(callback: types.CallbackQuery, state: FSMContext):
+    await ensure_clean_state(callback, state)
+    try:
+        await callback.message.delete()
+    except:
+        pass
+    await callback.answer()

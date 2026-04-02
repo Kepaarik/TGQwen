@@ -1,6 +1,7 @@
 from datetime import datetime
 from config import MOSCOW_TZ
 from database.connection import events_col, settings_col
+from bson import ObjectId
 
 async def get_all_events():
     cursor = events_col.find().sort("created_at", -1)
@@ -26,3 +27,6 @@ async def update_last_event_check(date_str: str):
         {"$set": {"value": date_str}}, 
         upsert=True
     )
+
+async def delete_event(event_id: str):
+    await events_col.delete_one({"_id": ObjectId(event_id)})

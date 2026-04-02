@@ -17,7 +17,7 @@ async def get_personal_wallet_text(user_id: int):
     for curr in AVAILABLE_CURRENCIES:
         symbol = CURRENCY_SYMBOLS[curr]
         bal = balances[curr]
-        lines.append(f"⚪️ {curr}: {bal:.2f} {symbol}")
+        lines.append(f"• {curr}: {bal:.2f} {symbol}")
         
     return "\n".join(lines)
 

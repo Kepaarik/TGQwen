@@ -49,3 +49,37 @@ async def process_event_desc(message: types.Message, state: FSMContext):
     await add_event(message.from_user.id, message.from_user.first_name, date_str, desc, "yearly")
     await message.answer("Событие успешно добавлено!", reply_markup=get_events_menu())
     await state.clear()
+
+from aiogram.filters import Command
+from config import ADMIN_ID
+from database.events_db import delete_event
+from aiogram.utils.keyboard import InlineKeyboardBuilder
+from aiogram.types import InlineKeyboardButton
+
+@router.message(Command("delevent"))
+async def admin_del_event(message: types.Message):
+    if ADMIN_ID != 0 and message.from_user.id != ADMIN_ID:
+        return
+        
+    evs = await get_all_events()
+    if not evs:
+        await message.answer("Нет событий для удаления.")
+        return
+        
+    builder = InlineKeyboardBuilder()
+    for e in evs[:10]:
+        builder.row(InlineKeyboardButton(text=f"❌ {e['description'][:25]}", callback_data=f"del_ev_{str(e['_id'])}"))
+    builder.row(InlineKeyboardButton(text="❌ Закрыть", callback_data="menu_close"))
+    
+    await message.answer("Выберите событие для удаления:", reply_markup=builder.as_markup())
+
+@router.callback_query(F.data.startswith("del_ev_"))
+async def process_del_event(callback: types.CallbackQuery):
+    if ADMIN_ID != 0 and callback.from_user.id != ADMIN_ID:
+        await callback.answer("Нет прав.", show_alert=True)
+        return
+        
+    event_id = callback.data.replace("del_ev_", "")
+    await delete_event(event_id)
+    await callback.message.edit_text(f"Событие удалено.")
+    await callback.answer()
