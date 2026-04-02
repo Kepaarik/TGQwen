@@ -6,7 +6,7 @@ from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton, ForceReply
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 
 # --- КОНФИГУРАЦИЯ ---
-BOT_TOKEN = 'ВАШ_ТОКЕН'
+BOT_TOKEN = '8788194731:AAGKYQ6ur_aR5sh4INVRqSNNl8f_I3dXLfs'
 
 logging.basicConfig(level=logging.INFO)
 bot = Bot(token=BOT_TOKEN)
