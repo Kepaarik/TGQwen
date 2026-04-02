@@ -9,7 +9,7 @@ from aiogram.utils.keyboard import InlineKeyboardBuilder
 from aiogram.exceptions import TelegramForbiddenError, TelegramAPIError
 
 # --- КОНФИГУРАЦИЯ ---
-BOT_TOKEN = '8788194731:AAGKYQ6ur_aR5sh4INVRqSNNl8f_I3dXLfs'  # Лучше брать из env
+BOT_TOKEN = '8788194731:AAGKYQ6ur_aR5sh4INVRqSNNl8f_I3dXLfs'
 PORT = int(os.getenv('PORT', 8080))
 
 logging.basicConfig(level=logging.INFO)
@@ -42,27 +42,38 @@ def get_wallet_keyboard():
     builder.row(InlineKeyboardButton(text="❌ Закрыть меню", callback_data="action_close"))
     return builder.as_markup()
 
-# --- ФУНКЦИИ ОТОБРАЖЕНИЯ С ОБРАБОТКОЙ ОШИБОК ---
+# --- БЕЗОПАСНЫЕ ФУНКЦИИ ОТПРАВКИ ---
 
 async def safe_send_message(chat_id, text, **kwargs):
-    """Отправляет сообщение, игнорируя ошибки Forbidden"""
     try:
         return await bot.send_message(chat_id, text, **kwargs)
     except TelegramForbiddenError:
-        logging.warning(f"Bot was kicked from chat {chat_id}. Ignoring.")
+        logging.warning(f"Bot kicked from chat {chat_id}")
     except Exception as e:
-        logging.error(f"Error sending message to {chat_id}: {e}")
+        logging.error(f"Send error: {e}")
     return None
 
 async def safe_edit_message(chat_id, message_id, text, **kwargs):
-    """Редактирует сообщение, игнорируя ошибки Forbidden"""
     try:
         return await bot.edit_message_text(chat_id=chat_id, message_id=message_id, text=text, **kwargs)
     except TelegramForbiddenError:
-        logging.warning(f"Bot was kicked from chat {chat_id}. Ignoring edit.")
+        logging.warning(f"Bot kicked from chat {chat_id}")
     except Exception as e:
-        logging.error(f"Error editing message in {chat_id}: {e}")
+        logging.error(f"Edit error: {e}")
     return None
+
+async def safe_delete_message(chat_id, message_id):
+    """Безопасное удаление сообщения"""
+    try:
+        await bot.delete_message(chat_id=chat_id, message_id=message_id)
+    except TelegramForbiddenError:
+        pass # Бота кикнули или нет прав
+    except Exception as e:
+        # Игнорируем ошибку, если сообщение уже удалено пользователем
+        if "message to delete not found" not in str(e).lower():
+            logging.debug(f"Delete error: {e}")
+
+# --- ОСНОВНАЯ ЛОГИКА ---
 
 async def render_wallet(message: types.Message | types.CallbackQuery, edit: bool = True):
     user_id = message.from_user.id
@@ -94,12 +105,15 @@ async def render_wallet(message: types.Message | types.CallbackQuery, edit: bool
         if sent_msg:
             data['last_wallet_msg_id'] = sent_msg.message_id
 
-# --- ОБРАБОТЧИКИ ---
-
 @dp.message(Command("start"))
 async def cmd_start(message: types.Message):
+    # 1. Сначала отправляем меню
     set_state(message.from_user.id, 'IDLE')
     await render_wallet(message, edit=False)
+    
+    # 2. Затем удаляем команду пользователя (/start)
+    # Делаем это в фоне или просто вызываем, не ожидая результата, чтобы не блокировать ответ
+    asyncio.create_task(safe_delete_message(message.chat.id, message.message_id))
 
 @dp.callback_query(F.data.startswith("action_"))
 async def handle_wallet_actions(callback: types.CallbackQuery):
@@ -117,7 +131,7 @@ async def handle_wallet_actions(callback: types.CallbackQuery):
 
     if action == "action_deposit":
         set_state(user_id, 'DEPOSIT')
-        await safe_send_message(
+        req_msg = await safe_send_message(
             chat_id=callback.message.chat.id,
             text="💸 <b>Пополнение баланса</b>\n\nВведите сумму:",
             reply_markup=ForceReply(input_field_placeholder="Например: 1000"),
@@ -132,7 +146,7 @@ async def handle_wallet_actions(callback: types.CallbackQuery):
             return
         
         set_state(user_id, 'WITHDRAW')
-        await safe_send_message(
+        req_msg = await safe_send_message(
             chat_id=callback.message.chat.id,
             text=f"💸 <b>Снятие средств</b>\n\nДоступно: {data['balance']:.2f} RUB\nВведите сумму:",
             reply_markup=ForceReply(input_field_placeholder="Например: 500"),
@@ -150,6 +164,10 @@ async def handle_text_input(message: types.Message):
     if state == 'IDLE':
         return 
 
+    # Пытаемся удалить сообщение пользователя с суммой сразу, чтобы было чисто
+    # Но сначала проверим валидность, чтобы не удалять ошибочный ввод без ответа? 
+    # Нет, лучше удалить всегда, а ответ дать новым сообщением.
+    
     try:
         clean_input = message.text.replace(',', '.').strip()
         amount = float(clean_input)
@@ -158,16 +176,15 @@ async def handle_text_input(message: types.Message):
     except ValueError:
         await safe_send_message(chat_id=message.chat.id, text="❌ Ошибка: Введите корректное положительное число.")
         set_state(user_id, 'IDLE')
+        await safe_delete_message(message.chat.id, message.message_id) # Удаляем неверный ввод
         return
+
+    # Удаляем ввод пользователя
+    await safe_delete_message(message.chat.id, message.message_id)
 
     if state == 'DEPOSIT':
         update_balance(user_id, amount)
         set_state(user_id, 'IDLE')
-        
-        try:
-            await message.delete()
-        except:
-            pass
             
         last_msg_id = data.get('last_wallet_msg_id')
         if last_msg_id:
@@ -181,27 +198,18 @@ async def handle_text_input(message: types.Message):
             success = await safe_send_message(chat_id=message.chat.id, text=f"✅ +{amount:.2f} RUB")
             if success:
                 await asyncio.sleep(2)
-                try: await success.delete()
-                except: pass
+                await safe_delete_message(success.chat.id, success.message_id)
 
     elif state == 'WITHDRAW':
         if amount > data['balance']:
             err_msg = await safe_send_message(chat_id=message.chat.id, text=f"❌ Недостаточно средств. Баланс: {data['balance']:.2f} RUB")
             await asyncio.sleep(3)
             if err_msg:
-                try: await err_msg.delete()
-                except: pass
-            try: await message.delete()
-            except: pass
+                await safe_delete_message(err_msg.chat.id, err_msg.message_id)
             return
             
         update_balance(user_id, -amount)
         set_state(user_id, 'IDLE')
-        
-        try:
-            await message.delete()
-        except:
-            pass
 
         last_msg_id = data.get('last_wallet_msg_id')
         if last_msg_id:
@@ -215,8 +223,7 @@ async def handle_text_input(message: types.Message):
             success = await safe_send_message(chat_id=message.chat.id, text=f"✅ -{amount:.2f} RUB")
             if success:
                 await asyncio.sleep(2)
-                try: await success.delete()
-                except: pass
+                await safe_delete_message(success.chat.id, success.message_id)
 
 # --- ФИКТИВНЫЙ СЕРВЕР ДЛЯ RENDER ---
 async def handle_request(request):
@@ -233,9 +240,7 @@ async def start_fake_server():
 
 # --- ЗАПУСК ---
 async def main():
-    # Запускаем фиктивный сервер для Render
     asyncio.create_task(start_fake_server())
-    
     print("Бот запущен...")
     await dp.start_polling(bot)
 
