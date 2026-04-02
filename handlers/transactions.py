@@ -4,6 +4,7 @@ from keyboards.inline_kb import get_currency_menu, get_main_menu
 from handlers.states import TransactionState
 from database.transactions import add_transaction
 import asyncio
+from services.finance_calc import get_personal_wallet_text
 
 router = Router()
 
@@ -66,7 +67,8 @@ async def process_amount(message: types.Message, state: FSMContext):
         except:
             pass
         await state.clear()
-        await message.answer("Действие отменено. Главное меню:", reply_markup=get_main_menu())
+        text = await get_personal_wallet_text(message.from_user.id)
+        await message.answer(text, reply_markup=get_main_menu(), parse_mode="HTML")
         return
 
     is_income = action_type == "income"
@@ -82,4 +84,5 @@ async def process_amount(message: types.Message, state: FSMContext):
     except:
         pass
         
-    await message.answer("Главное меню:", reply_markup=get_main_menu())
+    text = await get_personal_wallet_text(message.from_user.id)
+    await message.answer(text, reply_markup=get_main_menu(), parse_mode="HTML")

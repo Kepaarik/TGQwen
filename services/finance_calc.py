@@ -1,5 +1,25 @@
 from database.transactions import get_all_transactions
 from services.exchange_rates import get_exchange_rates
+from config import AVAILABLE_CURRENCIES, CURRENCY_SYMBOLS
+
+async def get_personal_wallet_text(user_id: int):
+    all_trans = await get_all_transactions(user_id)
+    balances = {c: 0.0 for c in AVAILABLE_CURRENCIES}
+    
+    if all_trans:
+        for t in all_trans:
+            cur = t["currency"]
+            amt = t["amount"]
+            if cur in balances:
+                balances[cur] += amt
+                
+    lines = ["💳 <b>Баланс</b>\n"]
+    for curr in AVAILABLE_CURRENCIES:
+        symbol = CURRENCY_SYMBOLS[curr]
+        bal = balances[curr]
+        lines.append(f"⚪️ {curr}: {bal:.2f} {symbol}")
+        
+    return "\n".join(lines)
 
 async def format_balance_tree(user_id=None):
     all_trans = await get_all_transactions(user_id)
