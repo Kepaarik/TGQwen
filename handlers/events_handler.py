@@ -68,8 +68,8 @@ async def admin_del_event(message: types.Message):
         
     builder = InlineKeyboardBuilder()
     for e in evs[:10]:
-        builder.row(InlineKeyboardButton(text=f"❌ {e['description'][:25]}", callback_data=f"del_ev_{str(e['_id'])}"))
-    builder.row(InlineKeyboardButton(text="❌ Закрыть", callback_data="menu_close"))
+        builder.row(InlineKeyboardButton(text=f"✕ {e['description'][:25]}", callback_data=f"del_ev_{str(e['_id'])}"))
+    builder.row(InlineKeyboardButton(text="✕ Закрыть", callback_data="menu_close"))
     
     await message.answer("Выберите событие для удаления:", reply_markup=builder.as_markup())
 

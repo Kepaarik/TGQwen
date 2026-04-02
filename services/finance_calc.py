@@ -13,7 +13,7 @@ async def get_personal_wallet_text(user_id: int):
             if cur in balances:
                 balances[cur] += amt
                 
-    lines = ["💳 <b>Баланс</b>\n"]
+    lines = ["◆ <b>Баланс</b>\n"]
     for curr in AVAILABLE_CURRENCIES:
         symbol = CURRENCY_SYMBOLS[curr]
         bal = balances[curr]
