@@ -9,7 +9,7 @@ async def get_exchange_rates():
     rates = {}
     
     try:
-        async with httpx.AsyncClient(timeout=10.0) as c:
+        async with httpx.AsyncClient(timeout=15.0) as c:
             resp = await c.get(url_nbrb)
             if resp.status_code == 200:
                 data = resp.json()
@@ -20,26 +20,34 @@ async def get_exchange_rates():
                     if code in ["USD", "EUR", "CNY", "RUB"]:
                         rates[code] = float(rate) / int(scale)
                 if len(rates) >= 4:
+                    logger.info(f"NBRB курсы получены: {rates}")
                     return rates
+            else:
+                logger.warning(f"NBRB вернул статус {resp.status_code}")
     except Exception as e:
-        logger.warning(f"NBRB недоступен: {e}. Пробую резерв.")
+        logger.warning(f"NBRB недоступен: {type(e).__name__}: {e}. Пробую резерв.")
 
     # Резервный международный API
     url_backup = "https://open.er-api.com/v6/latest/USD"
     try:
-        async with httpx.AsyncClient(timeout=10.0) as c:
+        async with httpx.AsyncClient(timeout=15.0) as c:
             resp = await c.get(url_backup)
             if resp.status_code == 200:
                 data = resp.json().get("rates", {})
                 usd_to_byn = data.get("BYN")
                 if usd_to_byn:
-                    return {
+                    result = {
                         "USD": usd_to_byn,
                         "EUR": usd_to_byn / data.get("EUR", 1),
                         "CNY": usd_to_byn / data.get("CNY", 1),
                         "RUB": usd_to_byn / data.get("RUB", 1)
                     }
+                    logger.info(f"Резервные курсы получены: {result}")
+                    return result
+            else:
+                logger.error(f"Резервный API вернул статус {resp.status_code}")
     except Exception as e:
-        logger.error(f"Ошибка всех API: {e}")
+        logger.error(f"Ошибка всех API: {type(e).__name__}: {e}")
     
     return None
+
