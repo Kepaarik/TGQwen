@@ -1,16 +1,21 @@
 import asyncio
 import logging
+import os
 from aiogram import Bot, Dispatcher
 from aiogram.fsm.storage.memory import MemoryStorage
 from aiogram.client.default import DefaultBotProperties
 from aiogram.enums import ParseMode
 from aiohttp import web
+import aiohttp
 
 from config import BOT_TOKEN, PORT
 from handlers import common, transactions, stats, events_handler
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
+
+# URL вашего сервиса на Render (задаётся через переменную окружения RENDER_URL)
+RENDER_URL = os.getenv("RENDER_URL", "")
 
 async def handle_request(request):
     return web.Response(text="Bot is running")
@@ -24,6 +29,21 @@ async def start_fake_server():
     await site.start()
     logger.info(f"Fake server started on port {PORT}")
 
+async def keep_alive():
+    """Пингует собственный URL каждые 10 минут, чтобы Render не усыплял сервис."""
+    if not RENDER_URL:
+        logger.warning("RENDER_URL не задан — keep-alive отключён.")
+        return
+    logger.info(f"Keep-alive запущен, пингуем {RENDER_URL} каждые 5 сек.")
+    while True:
+        await asyncio.sleep(5)
+        try:
+            async with aiohttp.ClientSession() as session:
+                async with session.get(RENDER_URL, timeout=aiohttp.ClientTimeout(total=10)) as resp:
+                    logger.info(f"Keep-alive ping: {resp.status}")
+        except Exception as e:
+            logger.warning(f"Keep-alive ошибка: {e}")
+
 async def main():
     bot = Bot(token=BOT_TOKEN, default=DefaultBotProperties(parse_mode=ParseMode.HTML))
     dp = Dispatcher(storage=MemoryStorage())
@@ -34,8 +54,9 @@ async def main():
     dp.include_router(stats.router)
     dp.include_router(events_handler.router)
 
-    # Start dummy server
+    # Start dummy server + keep-alive
     asyncio.create_task(start_fake_server())
+    asyncio.create_task(keep_alive())
     
     logger.info("Starting bot polling...")
     await dp.start_polling(bot)
