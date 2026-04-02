@@ -1,5 +1,5 @@
 from database.transactions import get_all_transactions
-from services.exchange_rates import get_exchange_rates
+from services.exchange_rates import get_cached_rates
 from config import AVAILABLE_CURRENCIES, CURRENCY_SYMBOLS
 
 async def get_personal_wallet_text(user_id: int):
@@ -25,8 +25,8 @@ async def format_balance_tree(user_id=None):
     all_trans = await get_all_transactions(user_id)
     if not all_trans: return "Данных нет."
     
-    rates = await get_exchange_rates()
-    if not rates: return "Ошибка курсов. BYN не рассчитан."
+    rates = get_cached_rates()
+    if not rates: return "Курсы ещё загружаются, попробуйте через пару секунд."
 
     u_data = {}
     total_all_byn = 0.0

@@ -1,9 +1,17 @@
+import asyncio
 import httpx
 import logging
 
 logger = logging.getLogger(__name__)
 
-async def get_exchange_rates():
+# Кеш курсов — обновляется в фоне раз в час
+_cached_rates = None
+
+def get_cached_rates():
+    """Возвращает закешированные курсы мгновенно (без HTTP-запроса)."""
+    return _cached_rates
+
+async def _fetch_rates():
     """Получает курсы из NBRB или резервного API (USD, EUR, CNY, RUB)."""
     url_nbrb = "https://api.nbrb.by/exrates/rates?periodicity=0"
     rates = {}
@@ -51,3 +59,14 @@ async def get_exchange_rates():
     
     return None
 
+async def refresh_rates_loop():
+    """Фоновая задача: обновляет кеш курсов при старте и затем каждый час."""
+    global _cached_rates
+    while True:
+        new_rates = await _fetch_rates()
+        if new_rates:
+            _cached_rates = new_rates
+            logger.info("Кеш курсов обновлён.")
+        else:
+            logger.warning("Не удалось обновить курсы, используем старый кеш.")
+        await asyncio.sleep(3600)  # 1 час

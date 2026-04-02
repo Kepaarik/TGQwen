@@ -10,6 +10,7 @@ import aiohttp
 
 from config import BOT_TOKEN, PORT
 from handlers import common, transactions, stats, events_handler
+from services.exchange_rates import refresh_rates_loop
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
@@ -30,7 +31,7 @@ async def start_fake_server():
     logger.info(f"Fake server started on port {PORT}")
 
 async def keep_alive():
-    """Пингует собственный URL каждые 10 минут, чтобы Render не усыплял сервис."""
+    """Пингует собственный URL каждые 5 секунд, чтобы Render не усыплял сервис."""
     if not RENDER_URL:
         logger.warning("RENDER_URL не задан — keep-alive отключён.")
         return
@@ -54,9 +55,10 @@ async def main():
     dp.include_router(stats.router)
     dp.include_router(events_handler.router)
 
-    # Start dummy server + keep-alive
+    # Background tasks
     asyncio.create_task(start_fake_server())
     asyncio.create_task(keep_alive())
+    asyncio.create_task(refresh_rates_loop())
     
     logger.info("Starting bot polling...")
     await dp.start_polling(bot)
