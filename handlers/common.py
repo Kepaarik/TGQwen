@@ -3,7 +3,7 @@ from aiogram import Router, types, F
 from aiogram.filters import Command
 from keyboards.inline_kb import get_main_menu, get_extra_menu
 from aiogram.fsm.context import FSMContext
-from services.finance_calc import get_personal_wallet_text
+from services.finance_calc import get_personal_wallet_text, format_balance_tree
 
 router = Router()
 
@@ -13,7 +13,11 @@ async def ensure_clean_state(message_or_call, state: FSMContext):
 @router.message(Command("start"))
 async def cmd_start(message: types.Message, state: FSMContext):
     await ensure_clean_state(message, state)
-    text = await get_personal_wallet_text(message.from_user.id)
+    try:
+        await message.delete()
+    except:
+        pass
+    text = await format_balance_tree(message.from_user.id)
     await message.answer(text, reply_markup=get_main_menu(), parse_mode="HTML")
 
 @router.callback_query(F.data == "menu_back_main")
