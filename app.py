@@ -13,13 +13,11 @@ bot = Bot(token=BOT_TOKEN)
 dp = Dispatcher()
 
 # --- ХРАНИЛИЩЕ ДАННЫХ (ОПЕРАТИВНАЯ ПАМЯТЬ) ---
-# Структура: { user_id: { 'balance': float, 'state': str } }
-# state может быть: 'IDLE', 'DEPOSIT', 'WITHDRAW'
 users_db = {}
 
 def get_user_data(user_id: int):
     if user_id not in users_db:
-        users_db[user_id] = {'balance': 0.0, 'state': 'IDLE'}
+        users_db[user_id] = {'balance': 0.0, 'state': 'IDLE', 'last_wallet_msg_id': None}
     return users_db[user_id]
 
 def update_balance(user_id: int, amount: float):
@@ -33,7 +31,6 @@ def set_state(user_id: int, state: str):
 # --- КЛАВИАТУРЫ ---
 
 def get_wallet_keyboard():
-    """Основная клавиатура кошелька"""
     builder = InlineKeyboardBuilder()
     builder.row(
         InlineKeyboardButton(text="➕ Пополнить баланс", callback_data="action_deposit"),
@@ -44,7 +41,7 @@ def get_wallet_keyboard():
 
 # --- ФУНКЦИИ ОТОБРАЖЕНИЯ ---
 
-async def render_wallet(message: types.Message | types.CallbackQuery, edit: bool = False):
+async def render_wallet(message: types.Message | types.CallbackQuery, edit: bool = True):
     """Отрисовывает текущее состояние кошелька"""
     user_id = message.from_user.id
     data = get_user_data(user_id)
@@ -55,26 +52,26 @@ async def render_wallet(message: types.Message | types.CallbackQuery, edit: bool
         f"Выберите действие:"
     )
     
+    # Если это CallbackQuery (нажатие кнопки), редактируем сообщение
     if isinstance(message, types.CallbackQuery):
         if edit:
             try:
                 await message.message.edit_text(text, reply_markup=get_wallet_keyboard(), parse_mode="HTML")
+                # Сохраняем ID сообщения, чтобы потом его обновлять
+                data['last_wallet_msg_id'] = message.message.message_id
             except Exception as e:
-                print(f"Ошибка редактирования: {e}")
-        else:
-            # Если это новый вызов без edit (редкий кейс для этого бота)
-            await message.message.answer(text, reply_markup=get_wallet_keyboard(), parse_mode="HTML")
+                logging.error(f"Ошибка редактирования: {e}")
     else:
-        # Это обычное сообщение (например, после старта)
-        await message.answer(text, reply_markup=get_wallet_keyboard(), parse_mode="HTML")
+        # Если это обычное сообщение (команда /start), отправляем новое
+        sent_msg = await message.answer(text, reply_markup=get_wallet_keyboard(), parse_mode="HTML")
+        data['last_wallet_msg_id'] = sent_msg.message_id
 
 # --- ОБРАБОТЧИКИ КОМАНД ---
 
 @dp.message(Command("start"))
 async def cmd_start(message: types.Message):
-    # Сброс состояния при старте
     set_state(message.from_user.id, 'IDLE')
-    await render_wallet(message)
+    await render_wallet(message, edit=False)
 
 # --- ОБРАБОТЧИКИ INLINE КНОПОК ---
 
@@ -96,9 +93,11 @@ async def handle_wallet_actions(callback: types.CallbackQuery):
     # 2. ПОПОЛНЕНИЕ
     if action == "action_deposit":
         set_state(user_id, 'DEPOSIT')
-        await callback.message.edit_text(
-            text="💸 <b>Пополнение баланса</b>\n\nВведите сумму, на которую хотите пополнить счет:",
-            reply_markup=ForceReply(input_field_placeholder="Введите сумму (например: 100)"),
+        # ОШИБКА БЫЛА ЗДЕСЬ: Нельзя использовать ForceReply в edit_text.
+        # Мы отправляем НОВОЕ сообщение с запросом ввода.
+        await callback.message.answer(
+            text="💸 <b>Пополнение баланса</b>\n\nВведите сумму:",
+            reply_markup=ForceReply(input_field_placeholder="Например: 1000"),
             parse_mode="HTML"
         )
         await callback.answer()
@@ -111,9 +110,10 @@ async def handle_wallet_actions(callback: types.CallbackQuery):
             return
         
         set_state(user_id, 'WITHDRAW')
-        await callback.message.edit_text(
-            text=f"💸 <b>Снятие средств</b>\n\nДоступно: {data['balance']:.2f} RUB\nВведите сумму для снятия:",
-            reply_markup=ForceReply(input_field_placeholder="Введите сумму"),
+        # Также отправляем новое сообщение
+        await callback.message.answer(
+            text=f"💸 <b>Снятие средств</b>\n\nДоступно: {data['balance']:.2f} RUB\nВведите сумму:",
+            reply_markup=ForceReply(input_field_placeholder="Например: 500"),
             parse_mode="HTML"
         )
         await callback.answer()
@@ -127,16 +127,12 @@ async def handle_text_input(message: types.Message):
     data = get_user_data(user_id)
     state = data['state']
 
-    # Если пользователь не в режиме ввода денег, игнорируем текст 
-    # (или можно добавить обработку других команд здесь)
+    # Если пользователь не в режиме ввода, игнорируем
     if state == 'IDLE':
-        # Если пользователь пишет текст, когда ничего не выбрано, 
-        # можно предложить нажать /start
         return 
 
     # Пытаемся преобразовать ввод в число
     try:
-        # Заменяем запятую на точку для удобства (100,5 -> 100.5)
         clean_input = message.text.replace(',', '.').strip()
         amount = float(clean_input)
         
@@ -144,48 +140,78 @@ async def handle_text_input(message: types.Message):
             raise ValueError("Сумма должна быть больше нуля")
             
     except ValueError:
-        await message.answer("❌ Ошибка: Пожалуйста, введите корректное положительное число.")
-        # Возвращаем пользователя в меню, сбрасывая состояние
+        await message.answer("❌ Ошибка: Введите корректное положительное число.")
+        # Сбрасываем состояние и возвращаем меню
         set_state(user_id, 'IDLE')
-        await render_wallet(message)
+        # Так как у нас нет ссылки на старое сообщение в этом хендлере напрямую,
+        # просто сбрасываем состояние. Пользователь может нажать /start или кнопки снова.
         return
 
     # ЛОГИКА ПОПОЛНЕНИЯ
     if state == 'DEPOSIT':
         update_balance(user_id, amount)
-        set_state(user_id, 'IDLE') # Сбрасываем состояние
+        set_state(user_id, 'IDLE')
         
-        # Отправляем временное уведомление об успехе
-        success_msg = await message.answer(f"✅ Баланс успешно пополнен на <b>{amount:.2f} RUB</b>", parse_mode="HTML")
-        
-        # Через 2 секунды удаляем уведомление и показываем обновленный кошелек
-        await asyncio.sleep(2)
+        # Удаляем сообщение пользователя с суммой, чтобы не засорять чат
         try:
-            await success_msg.delete()
-            await message.delete() # Удаляем также ввод пользователя для чистоты
+            await message.delete()
         except:
             pass
-        await render_wallet(message)
+            
+        # Находим последнее сообщение с кошельком и обновляем его
+        last_msg_id = data.get('last_wallet_msg_id')
+        if last_msg_id:
+            try:
+                # Используем bot.edit_message_text напрямую, так как у нас есть ID
+                await bot.edit_message_text(
+                    chat_id=user_id,
+                    message_id=last_msg_id,
+                    text=f"💳 <b>Личный Кошелек</b>\n\nТекущий баланс: <b>{data['balance']:.2f} RUB</b>\n\nВыберите действие:",
+                    reply_markup=get_wallet_keyboard(),
+                    parse_mode="HTML"
+                )
+                # Отправляем краткое уведомление об успехе
+                success = await message.answer(f"✅ +{amount:.2f} RUB")
+                await asyncio.sleep(2)
+                await success.delete()
+            except Exception as e:
+                logging.error(f"Не удалось обновить меню: {e}")
+                # Фолбэк: если не вышло отредактировать, просто пишем успех
+                await message.answer(f"✅ Баланс пополнен. Новый баланс: {data['balance']:.2f} RUB")
 
     # ЛОГИКА СНЯТИЯ
     elif state == 'WITHDRAW':
         if amount > data['balance']:
-            await message.answer(f"❌ Ошибка: Недостаточно средств. Ваш баланс: {data['balance']:.2f} RUB")
-            # Не сбрасываем состояние, даем попробовать ввести меньшую сумму
+            err_msg = await message.answer(f"❌ Недостаточно средств. Баланс: {data['balance']:.2f} RUB")
+            await asyncio.sleep(3)
+            await err_msg.delete()
+            await message.delete() # Удаляем неверный ввод
             return
             
         update_balance(user_id, -amount)
-        set_state(user_id, 'IDLE') # Сбрасываем состояние
+        set_state(user_id, 'IDLE')
         
-        success_msg = await message.answer(f"✅ Средства успешно сняты: <b>{amount:.2f} RUB</b>", parse_mode="HTML")
-        
-        await asyncio.sleep(2)
         try:
-            await success_msg.delete()
             await message.delete()
         except:
             pass
-        await render_wallet(message)
+
+        last_msg_id = data.get('last_wallet_msg_id')
+        if last_msg_id:
+            try:
+                await bot.edit_message_text(
+                    chat_id=user_id,
+                    message_id=last_msg_id,
+                    text=f"💳 <b>Личный Кошелек</b>\n\nТекущий баланс: <b>{data['balance']:.2f} RUB</b>\n\nВыберите действие:",
+                    reply_markup=get_wallet_keyboard(),
+                    parse_mode="HTML"
+                )
+                success = await message.answer(f"✅ -{amount:.2f} RUB")
+                await asyncio.sleep(2)
+                await success.delete()
+            except Exception as e:
+                logging.error(f"Не удалось обновить меню: {e}")
+                await message.answer(f"✅ Средства сняты. Новый баланс: {data['balance']:.2f} RUB")
 
 # --- ЗАПУСК ---
 async def main():
