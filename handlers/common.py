@@ -17,7 +17,7 @@ async def cmd_start(message: types.Message, state: FSMContext):
         await message.delete()
     except:
         pass
-    text = await format_balance_tree(message.from_user.id)
+    text = await get_personal_wallet_text(message.from_user.id)
     await message.answer(text, reply_markup=get_main_menu(), parse_mode="HTML")
 
 @router.callback_query(F.data == "menu_back_main")
