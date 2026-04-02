@@ -1,191 +1,201 @@
 import asyncio
 import logging
-import json
 from aiogram import Bot, Dispatcher, types, F
 from aiogram.filters import Command
-from aiogram.types import (
-    InlineKeyboardMarkup, InlineKeyboardButton,
-    WebAppInfo, ForceReply
-)
+from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton, ForceReply
 from aiogram.utils.keyboard import InlineKeyboardBuilder
-# ЗАМЕНИТЕ НА ВАШ ТОКЕН
-BOT_TOKEN = '8788194731:AAGKYQ6ur_aR5sh4INVRqSNNl8f_I3dXLfs'
-# ЗАМЕНИТЕ НА URL ВАШЕГО WEB APP (должен быть HTTPS)
-WEB_APP_URL = 'https://chat.qwen.ai/s/deploy/t_bcde28a9-8987-41a1-86e4-eeed2f418ab3' 
+
+# --- КОНФИГУРАЦИЯ ---
+BOT_TOKEN = 'ВАШ_ТОКЕН'
+
 logging.basicConfig(level=logging.INFO)
 bot = Bot(token=BOT_TOKEN)
 dp = Dispatcher()
 
-# --- ХРАНИЛИЩЕ СОСТОЯНИЙ (В реальном проекте используйте Redis/DB) ---
-# Структура: { user_id: { 'current_menu': 'main', 'counter': 0 } }
-user_states = {}
+# --- ИМИТАЦИЯ БАЗЫ ДАННЫХ (В памяти) ---
+# Структура: { user_id: balance }
+user_balances = {}
 
-def get_user_state(user_id: int):
-    if user_id not in user_states:
-        user_states[user_id] = {'current_menu': 'main', 'counter': 0, 'username': 'User'}
-    return user_states[user_id]
+def get_balance(user_id: int) -> float:
+    return user_balances.get(user_id, 0.0)
 
-def set_user_state(user_id: int, key: str, value):
-    if user_id not in user_states:
-        user_states[user_id] = {'current_menu': 'main', 'counter': 0, 'username': 'User'}
-    user_states[user_id][key] = value
+def update_balance(user_id: int, amount: float):
+    if user_id not in user_balances:
+        user_balances[user_id] = 0.0
+    user_balances[user_id] += amount
 
-# --- ГЕНЕРАТОРЫ КЛАВИАТУР ---
+# --- СЛОВАРЬ СОСТОЯНИЙ ПОЛЬЗОВАТЕЛЯ ---
+# Нужно знать, какое действие ожидает ввода от пользователя
+# States: 'idle', 'waiting_for_deposit', 'waiting_for_withdraw'
+user_actions = {}
 
-def get_main_kb():
+def set_action(user_id: int, action: str):
+    user_actions[user_id] = action
+
+def get_action(user_id: int) -> str:
+    return user_actions.get(user_id, 'idle')
+
+def clear_action(user_id: int):
+    if user_id in user_actions:
+        del user_actions[user_id]
+
+# --- ГЕНЕРАТОРЫ ИНТЕРФЕЙСА ---
+
+def create_wallet_kb():
+    """Клавиатура кошелька"""
     builder = InlineKeyboardBuilder()
-    builder.row(InlineKeyboardButton(text="📊 Статистика", callback_data="menu_stats"))
-    builder.row(InlineKeyboardButton(text="⚙️ Настройки", callback_data="menu_settings"))
-    builder.row(InlineKeyboardButton(text="🌐 Web App Demo", web_app=WebAppInfo(url=WEB_APP_URL)))
+    builder.row(
+        InlineKeyboardButton(text="➕ Пополнить", callback_data="wallet_deposit"),
+        InlineKeyboardButton(text="➖ Снять", callback_data="wallet_withdraw")
+    )
+    builder.row(InlineKeyboardButton(text="🔄 История (Демо)", callback_data="wallet_history"))
     builder.row(InlineKeyboardButton(text="❌ Закрыть", callback_data="close_menu"))
     return builder.as_markup()
 
-def get_stats_kb(current_count: int):
-    builder = InlineKeyboardBuilder()
-    builder.row(InlineKeyboardButton(text=f"👁 Просмотров: {current_count}", callback_data="noop")) # Неактивная кнопка
-    builder.row(
-        InlineKeyboardButton(text="➕ Добавить", callback_data="action_add"),
-        InlineKeyboardButton(text="➖ Убрать", callback_data="action_remove")
+def get_wallet_text(user_id: int):
+    balance = get_balance(user_id)
+    return (
+        f"💳 <b>Мой Кошелек</b>\n\n"
+        f"Текущий баланс: <b>{balance:.2f} ₽</b>\n\n"
+        f"Выберите действие:"
     )
-    builder.row(InlineKeyboardButton(text="🔙 Назад", callback_data="menu_back"))
-    return builder.as_markup()
-
-def get_settings_kb():
-    builder = InlineKeyboardBuilder()
-    builder.row(InlineKeyboardButton(text="🔔 Уведомления: ВКЛ", callback_data="toggle_notify_on"))
-    builder.row(InlineKeyboardButton(text="📝 Изменить имя", callback_data="action_change_name"))
-    builder.row(InlineKeyboardButton(text="🔙 Назад", callback_data="menu_back"))
-    return builder.as_markup()
 
 # --- ОБРАБОТЧИКИ ---
 
 @dp.message(Command("start"))
 async def cmd_start(message: types.Message):
-    user_id = message.from_user.id
-    set_user_state(user_id, 'username', message.from_user.full_name)
+    # Инициализируем баланс если нет
+    if message.from_user.id not in user_balances:
+        user_balances[message.from_user.id] = 0.0
     
-    text = (
-        f"👋 Привет, {message.from_user.full_name}!\n"
-        f"Это демо-интерфейс в стиле TGgemini.\n"
-        f"Используйте кнопки ниже для навигации."
-    )
-    await message.answer(text, reply_markup=get_main_kb())
+    await show_wallet(message.chat.id, message.from_user.id)
 
-# --- ГЛАВНЫЙ ОБРАБОТЧИК INLINE КНОПОК ---
-@dp.callback_query(F.data.startswith("menu_") | F.data.startswith("action_") | F.data.startswith("toggle_") | F.data == "close_menu" | F.data == "noop")
-async def process_inline_navigation(callback: types.CallbackQuery):
+async def show_wallet(chat_id: int, user_id: int, message_id: int = None):
+    """Отправляет новое сообщение или редактирует существующее"""
+    text = get_wallet_text(user_id)
+    kb = create_wallet_kb()
+    
+    if message_id:
+        try:
+            await bot.edit_message_text(
+                chat_id=chat_id,
+                message_id=message_id,
+                text=text,
+                reply_markup=kb,
+                parse_mode="HTML"
+            )
+        except Exception as e:
+            logging.warning(f"Ошибка редактирования: {e}")
+    else:
+        await bot.send_message(
+            chat_id=chat_id,
+            text=text,
+            reply_markup=kb,
+            parse_mode="HTML"
+        )
+
+# --- ОБРАБОТКА INLINE КНОПОК КОШЕЛЬКА ---
+
+@dp.callback_query(F.data.startswith("wallet_") | F.data == "close_menu")
+async def process_wallet_actions(callback: types.CallbackQuery):
     user_id = callback.from_user.id
     data = callback.data
-    state = get_user_state(user_id)
-    
-    # 1. Закрытие меню
+    message_id = callback.message.message_id
+    chat_id = callback.message.chat.id
+
+    # 1. Закрытие
     if data == "close_menu":
         await callback.message.delete()
         await callback.answer()
         return
 
-    # 2. Навигация: Главное меню
-    if data == "menu_back":
-        set_user_state(user_id, 'current_menu', 'main')
-        text = "🏠 Главное меню"
-        kb = get_main_kb()
-        await callback.message.edit_text(text, reply_markup=kb)
-        await callback.answer()
+    # 2. История (просто заглушка)
+    if data == "wallet_history":
+        await callback.answer("История пуста (демо-режим)", show_alert=True)
         return
 
-    # 3. Навигация: Статистика
-    if data == "menu_stats":
-        set_user_state(user_id, 'current_menu', 'stats')
-        count = state['counter']
-        text = f"📊 Ваша статистика\n\nТекущее значение счетчика: <b>{count}</b>"
-        kb = get_stats_kb(count)
-        await callback.message.edit_text(text, reply_markup=kb, parse_mode="HTML")
-        await callback.answer()
-        return
-
-    # 4. Навигация: Настройки
-    if data == "menu_settings":
-        set_user_state(user_id, 'current_menu', 'settings')
-        text = "⚙️ Настройки профиля"
-        kb = get_settings_kb()
-        await callback.message.edit_text(text, reply_markup=kb)
-        await callback.answer()
-        return
-
-    # 5. Действие: Изменение счетчика
-    if data == "action_add":
-        state['counter'] += 1
-        set_user_state(user_id, 'counter', state['counter'])
-        # Обновляем сообщение с новым значением
-        text = f"📊 Ваша статистика\n\nТекущее значение счетчика: <b>{state['counter']}</b>"
-        kb = get_stats_kb(state['counter'])
-        await callback.message.edit_text(text, reply_markup=kb, parse_mode="HTML")
-        await callback.answer("Значение увеличено!")
-        return
-
-    if data == "action_remove":
-        if state['counter'] > 0:
-            state['counter'] -= 1
-            set_user_state(user_id, 'counter', state['counter'])
-            text = f"📊 Ваша статистика\n\nТекущее значение счетчика: <b>{state['counter']}</b>"
-            kb = get_stats_kb(state['counter'])
-            await callback.message.edit_text(text, reply_markup=kb, parse_mode="HTML")
-            await callback.answer("Значение уменьшено!")
-        else:
-            await callback.answer("Нельзя уменьшить ниже 0!", show_alert=True)
-        return
-
-    # 6. Действие: Переключатель уведомлений
-    if data.startswith("toggle_notify"):
-        is_on = "on" in data
-        new_status = "off" if is_on else "on"
-        new_text_btn = "🔔 Уведомления: ВЫКЛ" if is_on else "🔔 Уведомления: ВКЛ"
-        
-        # Меняем кнопку в клавиатуре
-        kb = InlineKeyboardBuilder()
-        kb.row(InlineKeyboardButton(text=new_text_btn, callback_data=f"toggle_notify_{new_status}"))
-        kb.row(InlineKeyboardButton(text="📝 Изменить имя", callback_data="action_change_name"))
-        kb.row(InlineKeyboardButton(text="🔙 Назад", callback_data="menu_back"))
-        
-        await callback.message.edit_reply_markup(reply_markup=kb.as_markup())
-        await callback.answer(f"Уведомления переключены: {new_status.upper()}")
-        return
-
-    # 7. Действие: Изменение имени (Эмуляция ввода)
-    if data == "action_change_name":
+    # 3. Пополнение
+    if data == "wallet_deposit":
+        set_action(user_id, 'waiting_for_deposit')
         await callback.message.edit_text(
-            "✍️ Введите новое имя в поле ниже:",
-            reply_markup=ForceReply(input_field_placeholder="Ваше новое имя")
-        )
-        await callback.answer()
-        return
-
-    # Пустышка для неактивных кнопок
-    if data == "noop":
-        await callback.answer()
-
-# --- ОБРАБОТКА ВВОДА ИМЕНИ (Force Reply) ---
-@dp.message(F.reply_to_message is not None)
-async def handle_name_change(message: types.Message):
-    # Проверяем, что это ответ на наше сообщение с запросом имени
-    # В реальном боте лучше проверять ID сообщения из базы данных
-    if "Введите новое имя" in message.reply_to_message.text:
-        new_name = message.text
-        user_id = message.from_user.id
-        set_user_state(user_id, 'username', new_name)
-        
-        # Возвращаем меню настроек
-        kb = get_settings_kb()
-        await message.answer(
-            f"✅ Имя изменено на: <b>{new_name}</b>",
-            reply_markup=kb,
+            text="💸 <b>Пополнение баланса</b>\n\nВведите сумму пополнения (число):",
+            reply_markup=ForceReply(input_field_placeholder="Например: 1000"),
             parse_mode="HTML"
         )
+        await callback.answer()
+        return
+
+    # 4. Снятие
+    if data == "wallet_withdraw":
+        balance = get_balance(user_id)
+        if balance <= 0:
+            await callback.answer("Недостаточно средств для снятия!", show_alert=True)
+            return
+        
+        set_action(user_id, 'waiting_for_withdraw')
+        await callback.message.edit_text(
+            text=f"💸 <b>Снятие средств</b>\n\nДоступно: {balance:.2f} ₽\nВведите сумму для снятия:",
+            reply_markup=ForceReply(input_field_placeholder="Например: 500"),
+            parse_mode="HTML"
+        )
+        await callback.answer()
+        return
+
+# --- ОБРАБОТКА ВВОДА СУММЫ (TEXT) ---
+
+@dp.message(F.text)
+async def handle_amount_input(message: types.Message):
+    user_id = message.from_user.id
+    action = get_action(user_id)
+    
+    # Если пользователь не в режиме ввода денег, игнорируем или предлагаем начать
+    if action == 'idle':
+        # Можно добавить реакцию на обычные сообщения, если нужно
+        return
+
+    # Пытаемся распарсить число
+    try:
+        amount = float(message.text.replace(',', '.')) # Замена запятой на точку
+        if amount <= 0:
+            raise ValueError("Сумма должна быть положительной")
+    except ValueError:
+        await message.answer("❌ Ошибка: Введите корректное положительное число.")
+        # Возвращаем меню, но сбрасываем действие, чтобы пользователь начал заново через кнопку
+        clear_action(user_id)
+        await show_wallet(message.chat.id, user_id)
+        return
+
+    # Логика действий
+    if action == 'waiting_for_deposit':
+        update_balance(user_id, amount)
+        clear_action(user_id)
+        
+        # Отправляем подтверждение и возвращаем меню
+        sent_msg = await message.answer(f"✅ Успешно! Баланс пополнен на {amount:.2f} ₽")
+        # Небольшая задержка для красоты, затем показываем кошелек
+        await asyncio.sleep(1.5)
+        await sent_msg.delete() # Удаляем подтверждение, чтобы не засорять чат
+        await show_wallet(message.chat.id, user_id)
+
+    elif action == 'waiting_for_withdraw':
+        current_balance = get_balance(user_id)
+        if amount > current_balance:
+            await message.answer(f"❌ Ошибка: Недостаточно средств. Ваш баланс: {current_balance:.2f} ₽")
+            # Не сбрасываем действие, даем попробовать снова
+            return
+        
+        update_balance(user_id, -amount)
+        clear_action(user_id)
+        
+        sent_msg = await message.answer(f"✅ Успешно! Списано {amount:.2f} ₽")
+        await asyncio.sleep(1.5)
+        await sent_msg.delete()
+        await show_wallet(message.chat.id, user_id)
 
 # --- ЗАПУСК ---
 async def main():
     await bot.delete_webhook(drop_pending_updates=True)
-    print("Бот запущен в режиме Polling...")
+    print("Бот запущен. Используйте /start")
     await dp.start_polling(bot)
 
 if __name__ == "__main__":
