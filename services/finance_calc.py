@@ -40,7 +40,7 @@ async def format_balance_tree(user_id=None):
         u_data[uid]["bals"][cur] = u_data[uid]["bals"].get(cur, 0) + amt
         total_all_byn += amt if cur == "BYN" else amt * rates.get(cur, 0)
 
-    header = f"Курсы: USD: {rates['USD']:.3f}, EUR: {rates['EUR']:.3f}, CNY: {rates['CNY']:.3f}\n"
+    header = f"Курсы: USD($): {rates['USD']:.3f}, EUR(€): {rates['EUR']:.3f}, CNY(¥): {rates['CNY']:.3f}\n"
     lines = [header]
     
     for uid, data in u_data.items():

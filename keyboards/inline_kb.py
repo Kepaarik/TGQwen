@@ -26,7 +26,7 @@ def get_extra_menu():
         InlineKeyboardButton(text="★ События", callback_data="extra_events")
     )
     builder.row(
-        InlineKeyboardButton(text="◀ Назад", callback_data="menu_back_main"),
+        InlineKeyboardButton(text="← Назад", callback_data="menu_back_main"),
         InlineKeyboardButton(text="✕ Закрыть", callback_data="menu_close")
     )
     return builder.as_markup()
@@ -43,14 +43,14 @@ def get_currency_menu():
     for row in rows:
         builder.row(*row)
         
-    builder.row(InlineKeyboardButton(text="◀ Отмена", callback_data="menu_cancel_action"))
+    builder.row(InlineKeyboardButton(text="← Отмена", callback_data="menu_cancel_action"))
     return builder.as_markup()
 
 def get_events_menu():
     builder = InlineKeyboardBuilder()
     builder.row(InlineKeyboardButton(text="+ Добавить", callback_data="event_add"))
     builder.row(
-        InlineKeyboardButton(text="◀ Назад", callback_data="menu_back_main"),
+        InlineKeyboardButton(text="← Назад", callback_data="menu_back_main"),
         InlineKeyboardButton(text="✕ Закрыть", callback_data="menu_close")
     )
     return builder.as_markup()
