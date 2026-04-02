@@ -4,151 +4,188 @@ import json
 from aiogram import Bot, Dispatcher, types, F
 from aiogram.filters import Command
 from aiogram.types import (
-    ReplyKeyboardMarkup, KeyboardButton, WebAppInfo,
     InlineKeyboardMarkup, InlineKeyboardButton,
-    Message
+    WebAppInfo, ForceReply
 )
-
-# Включите логирование
-logging.basicConfig(level=logging.INFO)
-
+from aiogram.utils.keyboard import InlineKeyboardBuilder
 # ЗАМЕНИТЕ НА ВАШ ТОКЕН
 BOT_TOKEN = '8788194731:AAGKYQ6ur_aR5sh4INVRqSNNl8f_I3dXLfs'
 # ЗАМЕНИТЕ НА URL ВАШЕГО WEB APP (должен быть HTTPS)
 WEB_APP_URL = 'https://chat.qwen.ai/s/deploy/t_bcde28a9-8987-41a1-86e4-eeed2f418ab3' 
-
+logging.basicConfig(level=logging.INFO)
 bot = Bot(token=BOT_TOKEN)
 dp = Dispatcher()
 
-# -------------------------------------------------------------------
-# Хелпер для определения контекста (ЛС или Группа)
-# -------------------------------------------------------------------
-def get_context_info(message: Message):
-    user = message.from_user
-    chat = message.chat
-    
-    context = {
-        "user_id": user.id,
-        "user_name": user.full_name,
-        "chat_id": chat.id,
-        "chat_type": chat.type, # 'private', 'group', 'supergroup', 'channel'
-        "is_group": chat.type in ['group', 'supergroup']
-    }
-    return context
+# --- ХРАНИЛИЩЕ СОСТОЯНИЙ (В реальном проекте используйте Redis/DB) ---
+# Структура: { user_id: { 'current_menu': 'main', 'counter': 0 } }
+user_states = {}
 
-# -------------------------------------------------------------------
-# 1. Команда /start
-# -------------------------------------------------------------------
+def get_user_state(user_id: int):
+    if user_id not in user_states:
+        user_states[user_id] = {'current_menu': 'main', 'counter': 0, 'username': 'User'}
+    return user_states[user_id]
+
+def set_user_state(user_id: int, key: str, value):
+    if user_id not in user_states:
+        user_states[user_id] = {'current_menu': 'main', 'counter': 0, 'username': 'User'}
+    user_states[user_id][key] = value
+
+# --- ГЕНЕРАТОРЫ КЛАВИАТУР ---
+
+def get_main_kb():
+    builder = InlineKeyboardBuilder()
+    builder.row(InlineKeyboardButton(text="📊 Статистика", callback_data="menu_stats"))
+    builder.row(InlineKeyboardButton(text="⚙️ Настройки", callback_data="menu_settings"))
+    builder.row(InlineKeyboardButton(text="🌐 Web App Demo", web_app=WebAppInfo(url=WEB_APP_URL)))
+    builder.row(InlineKeyboardButton(text="❌ Закрыть", callback_data="close_menu"))
+    return builder.as_markup()
+
+def get_stats_kb(current_count: int):
+    builder = InlineKeyboardBuilder()
+    builder.row(InlineKeyboardButton(text=f"👁 Просмотров: {current_count}", callback_data="noop")) # Неактивная кнопка
+    builder.row(
+        InlineKeyboardButton(text="➕ Добавить", callback_data="action_add"),
+        InlineKeyboardButton(text="➖ Убрать", callback_data="action_remove")
+    )
+    builder.row(InlineKeyboardButton(text="🔙 Назад", callback_data="menu_back"))
+    return builder.as_markup()
+
+def get_settings_kb():
+    builder = InlineKeyboardBuilder()
+    builder.row(InlineKeyboardButton(text="🔔 Уведомления: ВКЛ", callback_data="toggle_notify_on"))
+    builder.row(InlineKeyboardButton(text="📝 Изменить имя", callback_data="action_change_name"))
+    builder.row(InlineKeyboardButton(text="🔙 Назад", callback_data="menu_back"))
+    return builder.as_markup()
+
+# --- ОБРАБОТЧИКИ ---
+
 @dp.message(Command("start"))
 async def cmd_start(message: types.Message):
-    ctx = get_context_info(message)
+    user_id = message.from_user.id
+    set_user_state(user_id, 'username', message.from_user.full_name)
     
     text = (
-        f"Привет, {ctx['user_name']}!\n"
-        f"Мы находимся в чате типа: <b>{ctx['chat_type']}</b>.\n"
-        f"ID чата: <code>{ctx['chat_id']}</code>\n\n"
-        f"Выберите способ взаимодействия:"
+        f"👋 Привет, {message.from_user.full_name}!\n"
+        f"Это демо-интерфейс в стиле TGgemini.\n"
+        f"Используйте кнопки ниже для навигации."
     )
+    await message.answer(text, reply_markup=get_main_kb())
 
-    # Создаем Reply Keyboard с Web App
-    # WebAppInfo требует точный URL
-    kb = ReplyKeyboardMarkup(keyboard=[
-        [
-            KeyboardButton(text="🌐 Открыть Web App (Reply)", web_app=WebAppInfo(url=WEB_APP_URL))
-        ],
-        [
-            KeyboardButton(text="📝 Обычный текст"),
-            KeyboardButton(text="📍 Геолокация")
-        ]
-    ], resize_keyboard=True, input_field_placeholder="Нажмите кнопку ниже...")
-
-    await message.answer(text, reply_markup=kb, parse_mode="HTML")
-
-# -------------------------------------------------------------------
-# 2. Обработка данных от Web App (когда юзер жмет "Отправить" внутри HTML)
-# -------------------------------------------------------------------
-@dp.message(F.web_app_data)
-async def handle_web_app_data(message: types.Message):
-    ctx = get_context_info(message)
+# --- ГЛАВНЫЙ ОБРАБОТЧИК INLINE КНОПОК ---
+@dp.callback_query(F.data.startswith("menu_") | F.data.startswith("action_") | F.data.startswith("toggle_") | F.data == "close_menu" | F.data == "noop")
+async def process_inline_navigation(callback: types.CallbackQuery):
+    user_id = callback.from_user.id
+    data = callback.data
+    state = get_user_state(user_id)
     
-    # Данные приходят в виде строки JSON
-    data_str = message.web_app_data.data
-    try:
-        data = json.loads(data_str)
-        response_text = (
-            f"✅ Получены данные из Web App!\n"
-            f"Пользователь: {ctx['user_name']} (ID: {ctx['user_id']})\n"
-            f"Чат: {ctx['chat_type']} (ID: {ctx['chat_id']})\n"
-            f"Данные: <code>{data_str}</code>"
+    # 1. Закрытие меню
+    if data == "close_menu":
+        await callback.message.delete()
+        await callback.answer()
+        return
+
+    # 2. Навигация: Главное меню
+    if data == "menu_back":
+        set_user_state(user_id, 'current_menu', 'main')
+        text = "🏠 Главное меню"
+        kb = get_main_kb()
+        await callback.message.edit_text(text, reply_markup=kb)
+        await callback.answer()
+        return
+
+    # 3. Навигация: Статистика
+    if data == "menu_stats":
+        set_user_state(user_id, 'current_menu', 'stats')
+        count = state['counter']
+        text = f"📊 Ваша статистика\n\nТекущее значение счетчика: <b>{count}</b>"
+        kb = get_stats_kb(count)
+        await callback.message.edit_text(text, reply_markup=kb, parse_mode="HTML")
+        await callback.answer()
+        return
+
+    # 4. Навигация: Настройки
+    if data == "menu_settings":
+        set_user_state(user_id, 'current_menu', 'settings')
+        text = "⚙️ Настройки профиля"
+        kb = get_settings_kb()
+        await callback.message.edit_text(text, reply_markup=kb)
+        await callback.answer()
+        return
+
+    # 5. Действие: Изменение счетчика
+    if data == "action_add":
+        state['counter'] += 1
+        set_user_state(user_id, 'counter', state['counter'])
+        # Обновляем сообщение с новым значением
+        text = f"📊 Ваша статистика\n\nТекущее значение счетчика: <b>{state['counter']}</b>"
+        kb = get_stats_kb(state['counter'])
+        await callback.message.edit_text(text, reply_markup=kb, parse_mode="HTML")
+        await callback.answer("Значение увеличено!")
+        return
+
+    if data == "action_remove":
+        if state['counter'] > 0:
+            state['counter'] -= 1
+            set_user_state(user_id, 'counter', state['counter'])
+            text = f"📊 Ваша статистика\n\nТекущее значение счетчика: <b>{state['counter']}</b>"
+            kb = get_stats_kb(state['counter'])
+            await callback.message.edit_text(text, reply_markup=kb, parse_mode="HTML")
+            await callback.answer("Значение уменьшено!")
+        else:
+            await callback.answer("Нельзя уменьшить ниже 0!", show_alert=True)
+        return
+
+    # 6. Действие: Переключатель уведомлений
+    if data.startswith("toggle_notify"):
+        is_on = "on" in data
+        new_status = "off" if is_on else "on"
+        new_text_btn = "🔔 Уведомления: ВЫКЛ" if is_on else "🔔 Уведомления: ВКЛ"
+        
+        # Меняем кнопку в клавиатуре
+        kb = InlineKeyboardBuilder()
+        kb.row(InlineKeyboardButton(text=new_text_btn, callback_data=f"toggle_notify_{new_status}"))
+        kb.row(InlineKeyboardButton(text="📝 Изменить имя", callback_data="action_change_name"))
+        kb.row(InlineKeyboardButton(text="🔙 Назад", callback_data="menu_back"))
+        
+        await callback.message.edit_reply_markup(reply_markup=kb.as_markup())
+        await callback.answer(f"Уведомления переключены: {new_status.upper()}")
+        return
+
+    # 7. Действие: Изменение имени (Эмуляция ввода)
+    if data == "action_change_name":
+        await callback.message.edit_text(
+            "✍️ Введите новое имя в поле ниже:",
+            reply_markup=ForceReply(input_field_placeholder="Ваше новое имя")
         )
-    except json.JSONDecodeError:
-        response_text = f"Получены сырые данные: {data_str}"
+        await callback.answer()
+        return
 
-    # Отвечаем в тот же чат, откуда пришел запрос
-    await message.answer(response_text, parse_mode="HTML")
+    # Пустышка для неактивных кнопок
+    if data == "noop":
+        await callback.answer()
 
-# -------------------------------------------------------------------
-# 3. Демонстрация Inline Web App (работает в группах лучше)
-# -------------------------------------------------------------------
-@dp.message(Command("inline_wa"))
-async def cmd_inline_wa(message: types.Message):
-    ctx = get_context_info(message)
-    
-    # Inline клавиатура с кнопкой Web App
-    inline_kb = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="🚀 Запустить Mini App (Inline)", web_app=WebAppInfo(url=WEB_APP_URL))]
-    ])
-    
-    await message.answer(
-        f"Нажмите кнопку ниже, чтобы открыть Web App.\n"
-        f"Это работает даже в группах, если бот имеет право отправлять сообщения.",
-        reply_markup=inline_kb
-    )
+# --- ОБРАБОТКА ВВОДА ИМЕНИ (Force Reply) ---
+@dp.message(F.reply_to_message is not None)
+async def handle_name_change(message: types.Message):
+    # Проверяем, что это ответ на наше сообщение с запросом имени
+    # В реальном боте лучше проверять ID сообщения из базы данных
+    if "Введите новое имя" in message.reply_to_message.text:
+        new_name = message.text
+        user_id = message.from_user.id
+        set_user_state(user_id, 'username', new_name)
+        
+        # Возвращаем меню настроек
+        kb = get_settings_kb()
+        await message.answer(
+            f"✅ Имя изменено на: <b>{new_name}</b>",
+            reply_markup=kb,
+            parse_mode="HTML"
+        )
 
-# -------------------------------------------------------------------
-# 4. Обработка обычных сообщений (для проверки контекста в группах)
-# -------------------------------------------------------------------
-@dp.message(F.text == "📝 Обычный текст")
-async def handle_text_btn(message: types.Message):
-    ctx = get_context_info(message)
-    prefix = "📢 В группе" if ctx['is_group'] else "👤 В ЛС"
-    await message.answer(f"{prefix}: Вы нажали кнопку текста. Ваш ID: {ctx['user_id']}")
-
-@dp.message(F.text == "📍 Геолокация")
-async def handle_loc_btn(message: types.Message):
-    # Кнопка запроса геолокации работает только в Reply Keyboard
-    kb = ReplyKeyboardMarkup(keyboard=[
-        [KeyboardButton(text="Отправить мою геопозицию", request_location=True)]
-    ], resize_keyboard=True)
-    await message.answer("Нажмите кнопку ниже:", reply_markup=kb)
-
-@dp.message(F.location)
-async def handle_location(message: types.Message):
-    ctx = get_context_info(message)
-    await message.answer(
-        f"📍 Получена локация от {ctx['user_name']} в чате {ctx['chat_type']}.\n"
-        f"Sh: {message.location.latitude}, Ln: {message.location.longitude}"
-    )
-
-# -------------------------------------------------------------------
-# 5. Обработка команд в группах (чтобы бот реагировал на упоминания)
-# -------------------------------------------------------------------
-@dp.message(Command("test_group"))
-async def cmd_test_group(message: types.Message):
-    ctx = get_context_info(message)
-    await message.answer(
-        f"Бот активен в группе!\n"
-        f"Запрос от: {ctx['user_name']}\n"
-        f"Chat ID: {ctx['chat_id']}"
-    )
-
-# -------------------------------------------------------------------
-# Запуск
-# -------------------------------------------------------------------
+# --- ЗАПУСК ---
 async def main():
-    # Удаляем вебхук, если использовался ранее
     await bot.delete_webhook(drop_pending_updates=True)
-    print("Бот запущен...")
+    print("Бот запущен в режиме Polling...")
     await dp.start_polling(bot)
 
 if __name__ == "__main__":
