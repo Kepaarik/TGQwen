@@ -6,196 +6,190 @@ from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton, ForceReply
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 
 # --- КОНФИГУРАЦИЯ ---
-BOT_TOKEN = '8788194731:AAGKYQ6ur_aR5sh4INVRqSNNl8f_I3dXLfs'
+BOT_TOKEN = '8788194731:AAGKYQ6ur_aR5sh4INVRqSNNl8f_I3dXLfs'  # <-- ВСТАВЬТЕ СЮДА ВАШ ТОКЕН
 
 logging.basicConfig(level=logging.INFO)
 bot = Bot(token=BOT_TOKEN)
 dp = Dispatcher()
 
-# --- ИМИТАЦИЯ БАЗЫ ДАННЫХ (В памяти) ---
-# Структура: { user_id: balance }
-user_balances = {}
+# --- ХРАНИЛИЩЕ ДАННЫХ (ОПЕРАТИВНАЯ ПАМЯТЬ) ---
+# Структура: { user_id: { 'balance': float, 'state': str } }
+# state может быть: 'IDLE', 'DEPOSIT', 'WITHDRAW'
+users_db = {}
 
-def get_balance(user_id: int) -> float:
-    return user_balances.get(user_id, 0.0)
+def get_user_data(user_id: int):
+    if user_id not in users_db:
+        users_db[user_id] = {'balance': 0.0, 'state': 'IDLE'}
+    return users_db[user_id]
 
 def update_balance(user_id: int, amount: float):
-    if user_id not in user_balances:
-        user_balances[user_id] = 0.0
-    user_balances[user_id] += amount
+    data = get_user_data(user_id)
+    data['balance'] += amount
 
-# --- СЛОВАРЬ СОСТОЯНИЙ ПОЛЬЗОВАТЕЛЯ ---
-# Нужно знать, какое действие ожидает ввода от пользователя
-# States: 'idle', 'waiting_for_deposit', 'waiting_for_withdraw'
-user_actions = {}
+def set_state(user_id: int, state: str):
+    data = get_user_data(user_id)
+    data['state'] = state
 
-def set_action(user_id: int, action: str):
-    user_actions[user_id] = action
+# --- КЛАВИАТУРЫ ---
 
-def get_action(user_id: int) -> str:
-    return user_actions.get(user_id, 'idle')
-
-def clear_action(user_id: int):
-    if user_id in user_actions:
-        del user_actions[user_id]
-
-# --- ГЕНЕРАТОРЫ ИНТЕРФЕЙСА ---
-
-def create_wallet_kb():
-    """Клавиатура кошелька"""
+def get_wallet_keyboard():
+    """Основная клавиатура кошелька"""
     builder = InlineKeyboardBuilder()
     builder.row(
-        InlineKeyboardButton(text="➕ Пополнить", callback_data="wallet_deposit"),
-        InlineKeyboardButton(text="➖ Снять", callback_data="wallet_withdraw")
+        InlineKeyboardButton(text="➕ Пополнить баланс", callback_data="action_deposit"),
+        InlineKeyboardButton(text="➖ Снять средства", callback_data="action_withdraw")
     )
-    builder.row(InlineKeyboardButton(text="🔄 История (Демо)", callback_data="wallet_history"))
-    builder.row(InlineKeyboardButton(text="❌ Закрыть", callback_data="close_menu"))
+    builder.row(InlineKeyboardButton(text="❌ Закрыть меню", callback_data="action_close"))
     return builder.as_markup()
 
-def get_wallet_text(user_id: int):
-    balance = get_balance(user_id)
-    return (
-        f"💳 <b>Мой Кошелек</b>\n\n"
-        f"Текущий баланс: <b>{balance:.2f} ₽</b>\n\n"
+# --- ФУНКЦИИ ОТОБРАЖЕНИЯ ---
+
+async def render_wallet(message: types.Message | types.CallbackQuery, edit: bool = False):
+    """Отрисовывает текущее состояние кошелька"""
+    user_id = message.from_user.id
+    data = get_user_data(user_id)
+    
+    text = (
+        f"💳 <b>Личный Кошелек</b>\n\n"
+        f"Текущий баланс: <b>{data['balance']:.2f} RUB</b>\n\n"
         f"Выберите действие:"
     )
+    
+    if isinstance(message, types.CallbackQuery):
+        if edit:
+            try:
+                await message.message.edit_text(text, reply_markup=get_wallet_keyboard(), parse_mode="HTML")
+            except Exception as e:
+                print(f"Ошибка редактирования: {e}")
+        else:
+            # Если это новый вызов без edit (редкий кейс для этого бота)
+            await message.message.answer(text, reply_markup=get_wallet_keyboard(), parse_mode="HTML")
+    else:
+        # Это обычное сообщение (например, после старта)
+        await message.answer(text, reply_markup=get_wallet_keyboard(), parse_mode="HTML")
 
-# --- ОБРАБОТЧИКИ ---
+# --- ОБРАБОТЧИКИ КОМАНД ---
 
 @dp.message(Command("start"))
 async def cmd_start(message: types.Message):
-    # Инициализируем баланс если нет
-    if message.from_user.id not in user_balances:
-        user_balances[message.from_user.id] = 0.0
-    
-    await show_wallet(message.chat.id, message.from_user.id)
+    # Сброс состояния при старте
+    set_state(message.from_user.id, 'IDLE')
+    await render_wallet(message)
 
-async def show_wallet(chat_id: int, user_id: int, message_id: int = None):
-    """Отправляет новое сообщение или редактирует существующее"""
-    text = get_wallet_text(user_id)
-    kb = create_wallet_kb()
-    
-    if message_id:
-        try:
-            await bot.edit_message_text(
-                chat_id=chat_id,
-                message_id=message_id,
-                text=text,
-                reply_markup=kb,
-                parse_mode="HTML"
-            )
-        except Exception as e:
-            logging.warning(f"Ошибка редактирования: {e}")
-    else:
-        await bot.send_message(
-            chat_id=chat_id,
-            text=text,
-            reply_markup=kb,
-            parse_mode="HTML"
-        )
+# --- ОБРАБОТЧИКИ INLINE КНОПОК ---
 
-# --- ОБРАБОТКА INLINE КНОПОК КОШЕЛЬКА ---
-
-@dp.callback_query(F.data.startswith("wallet_") | F.data == "close_menu")
-async def process_wallet_actions(callback: types.CallbackQuery):
+@dp.callback_query(F.data.startswith("action_"))
+async def handle_wallet_actions(callback: types.CallbackQuery):
     user_id = callback.from_user.id
-    data = callback.data
-    message_id = callback.message.message_id
-    chat_id = callback.message.chat.id
+    action = callback.data
+    data = get_user_data(user_id)
 
-    # 1. Закрытие
-    if data == "close_menu":
-        await callback.message.delete()
+    # 1. ЗАКРЫТЬ МЕНЮ
+    if action == "action_close":
+        try:
+            await callback.message.delete()
+        except:
+            pass
         await callback.answer()
         return
 
-    # 2. История (просто заглушка)
-    if data == "wallet_history":
-        await callback.answer("История пуста (демо-режим)", show_alert=True)
-        return
-
-    # 3. Пополнение
-    if data == "wallet_deposit":
-        set_action(user_id, 'waiting_for_deposit')
+    # 2. ПОПОЛНЕНИЕ
+    if action == "action_deposit":
+        set_state(user_id, 'DEPOSIT')
         await callback.message.edit_text(
-            text="💸 <b>Пополнение баланса</b>\n\nВведите сумму пополнения (число):",
-            reply_markup=ForceReply(input_field_placeholder="Например: 1000"),
+            text="💸 <b>Пополнение баланса</b>\n\nВведите сумму, на которую хотите пополнить счет:",
+            reply_markup=ForceReply(input_field_placeholder="Введите сумму (например: 100)"),
             parse_mode="HTML"
         )
         await callback.answer()
         return
 
-    # 4. Снятие
-    if data == "wallet_withdraw":
-        balance = get_balance(user_id)
-        if balance <= 0:
-            await callback.answer("Недостаточно средств для снятия!", show_alert=True)
+    # 3. СНЯТИЕ
+    if action == "action_withdraw":
+        if data['balance'] <= 0:
+            await callback.answer("⚠️ На балансе недостаточно средств!", show_alert=True)
             return
         
-        set_action(user_id, 'waiting_for_withdraw')
+        set_state(user_id, 'WITHDRAW')
         await callback.message.edit_text(
-            text=f"💸 <b>Снятие средств</b>\n\nДоступно: {balance:.2f} ₽\nВведите сумму для снятия:",
-            reply_markup=ForceReply(input_field_placeholder="Например: 500"),
+            text=f"💸 <b>Снятие средств</b>\n\nДоступно: {data['balance']:.2f} RUB\nВведите сумму для снятия:",
+            reply_markup=ForceReply(input_field_placeholder="Введите сумму"),
             parse_mode="HTML"
         )
         await callback.answer()
         return
 
-# --- ОБРАБОТКА ВВОДА СУММЫ (TEXT) ---
+# --- ОБРАБОТЧИК ТЕКСТОВЫХ ВВОДОВ (СУММ) ---
 
 @dp.message(F.text)
-async def handle_amount_input(message: types.Message):
+async def handle_text_input(message: types.Message):
     user_id = message.from_user.id
-    action = get_action(user_id)
-    
-    # Если пользователь не в режиме ввода денег, игнорируем или предлагаем начать
-    if action == 'idle':
-        # Можно добавить реакцию на обычные сообщения, если нужно
-        return
+    data = get_user_data(user_id)
+    state = data['state']
 
-    # Пытаемся распарсить число
+    # Если пользователь не в режиме ввода денег, игнорируем текст 
+    # (или можно добавить обработку других команд здесь)
+    if state == 'IDLE':
+        # Если пользователь пишет текст, когда ничего не выбрано, 
+        # можно предложить нажать /start
+        return 
+
+    # Пытаемся преобразовать ввод в число
     try:
-        amount = float(message.text.replace(',', '.')) # Замена запятой на точку
+        # Заменяем запятую на точку для удобства (100,5 -> 100.5)
+        clean_input = message.text.replace(',', '.').strip()
+        amount = float(clean_input)
+        
         if amount <= 0:
-            raise ValueError("Сумма должна быть положительной")
+            raise ValueError("Сумма должна быть больше нуля")
+            
     except ValueError:
-        await message.answer("❌ Ошибка: Введите корректное положительное число.")
-        # Возвращаем меню, но сбрасываем действие, чтобы пользователь начал заново через кнопку
-        clear_action(user_id)
-        await show_wallet(message.chat.id, user_id)
+        await message.answer("❌ Ошибка: Пожалуйста, введите корректное положительное число.")
+        # Возвращаем пользователя в меню, сбрасывая состояние
+        set_state(user_id, 'IDLE')
+        await render_wallet(message)
         return
 
-    # Логика действий
-    if action == 'waiting_for_deposit':
+    # ЛОГИКА ПОПОЛНЕНИЯ
+    if state == 'DEPOSIT':
         update_balance(user_id, amount)
-        clear_action(user_id)
+        set_state(user_id, 'IDLE') # Сбрасываем состояние
         
-        # Отправляем подтверждение и возвращаем меню
-        sent_msg = await message.answer(f"✅ Успешно! Баланс пополнен на {amount:.2f} ₽")
-        # Небольшая задержка для красоты, затем показываем кошелек
-        await asyncio.sleep(1.5)
-        await sent_msg.delete() # Удаляем подтверждение, чтобы не засорять чат
-        await show_wallet(message.chat.id, user_id)
+        # Отправляем временное уведомление об успехе
+        success_msg = await message.answer(f"✅ Баланс успешно пополнен на <b>{amount:.2f} RUB</b>", parse_mode="HTML")
+        
+        # Через 2 секунды удаляем уведомление и показываем обновленный кошелек
+        await asyncio.sleep(2)
+        try:
+            await success_msg.delete()
+            await message.delete() # Удаляем также ввод пользователя для чистоты
+        except:
+            pass
+        await render_wallet(message)
 
-    elif action == 'waiting_for_withdraw':
-        current_balance = get_balance(user_id)
-        if amount > current_balance:
-            await message.answer(f"❌ Ошибка: Недостаточно средств. Ваш баланс: {current_balance:.2f} ₽")
-            # Не сбрасываем действие, даем попробовать снова
+    # ЛОГИКА СНЯТИЯ
+    elif state == 'WITHDRAW':
+        if amount > data['balance']:
+            await message.answer(f"❌ Ошибка: Недостаточно средств. Ваш баланс: {data['balance']:.2f} RUB")
+            # Не сбрасываем состояние, даем попробовать ввести меньшую сумму
             return
-        
+            
         update_balance(user_id, -amount)
-        clear_action(user_id)
+        set_state(user_id, 'IDLE') # Сбрасываем состояние
         
-        sent_msg = await message.answer(f"✅ Успешно! Списано {amount:.2f} ₽")
-        await asyncio.sleep(1.5)
-        await sent_msg.delete()
-        await show_wallet(message.chat.id, user_id)
+        success_msg = await message.answer(f"✅ Средства успешно сняты: <b>{amount:.2f} RUB</b>", parse_mode="HTML")
+        
+        await asyncio.sleep(2)
+        try:
+            await success_msg.delete()
+            await message.delete()
+        except:
+            pass
+        await render_wallet(message)
 
 # --- ЗАПУСК ---
 async def main():
-    await bot.delete_webhook(drop_pending_updates=True)
-    print("Бот запущен. Используйте /start")
+    print("Бот запущен...")
     await dp.start_polling(bot)
 
 if __name__ == "__main__":
