@@ -25,11 +25,14 @@ async def back_to_main(callback: types.CallbackQuery, state: FSMContext):
     await ensure_clean_state(callback, state)
     text = await get_personal_wallet_text(callback.from_user.id)
     try:
-        await callback.message.delete()
+        await callback.message.edit_text(text, reply_markup=get_main_menu(), parse_mode="HTML")
     except Exception as e:
-        logging.warning(f"Не удалось удалить сообщение: {e}")
-    
-    await callback.message.answer(text, reply_markup=get_main_menu(), parse_mode="HTML")
+        logging.warning(f"Не удалось отредактировать сообщение: {e}")
+        try:
+            await callback.message.delete()
+        except:
+            pass
+        await callback.message.answer(text, reply_markup=get_main_menu(), parse_mode="HTML")
     await callback.answer()
 
 @router.callback_query(F.data == "menu_extra")
