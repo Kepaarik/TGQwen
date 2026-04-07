@@ -32,10 +32,12 @@ async def show_events_page(callback: types.CallbackQuery, page: int = 0):
     for i, event in enumerate(page_events, start=start_idx + 1):
         rec = event.get('recurrence', 'нет') or 'нет'
         days_left = get_days_until(event['date_str'], rec)
+        # Символы периодичности
+        rec_symbol = {'yearly': '\U0001F4C5', 'monthly': '\U0001F5D3', 'weekly': '\U0001F4C6', 'нет': '\u221E', None: '\u221E'}.get(rec, '\u221E')
         text += f"<b>{i}.</b> {event['description']}\n"
-        text += f"   Дата: {event['date_str']} | Периодичность: {rec}\n"
-        if rec != 'нет' and days_left:
-            text += f"   Дней осталось: {days_left}\n"
+        text += f"   \U0001F4C5 Дата: {event['date_str']} | Периодичность: {rec_symbol} {rec}\n"
+        if rec != 'нет' and rec is not None and days_left:
+            text += f"   \u231B Дней осталось: {days_left}\n"
         text += "\n"
     
     try:
