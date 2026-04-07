@@ -242,10 +242,22 @@ async def start_edit_rec(callback: types.CallbackQuery):
 
 @router.callback_query(F.data.startswith("ev_set_rec_"))
 async def set_recurrence(callback: types.CallbackQuery):
-    parts = callback.data.split("_")
-    # ev_set_rec_yearly_EVENTID
-    rec_type = parts[4]  # yearly, monthly, weekly, none
-    event_id = "_".join(parts[5:])  # на случай если в ID есть подчеркивания
+    # Формат: ev_set_rec_TYPE_EVENTID
+    # Находим второй подчеркивание после ev_set_rec
+    prefix = "ev_set_rec_"
+    if not callback.data.startswith(prefix):
+        await callback.answer("Ошибка формата", show_alert=True)
+        return
+    
+    rest = callback.data[len(prefix):]
+    # rest = "yearly_EVENTID" или "none_EVENTID"
+    underscore_pos = rest.find("_")
+    if underscore_pos == -1:
+        await callback.answer("Ошибка формата", show_alert=True)
+        return
+    
+    rec_type = rest[:underscore_pos]
+    event_id = rest[underscore_pos + 1:]
     
     rec_map = {
         "yearly": "yearly",
@@ -257,13 +269,28 @@ async def set_recurrence(callback: types.CallbackQuery):
     rec_value = rec_map.get(rec_type)
     await update_event(event_id, {"recurrence": rec_value})
     
-    rec_text = rec_value or "без повторения"
+    rec_text_map = {
+        "yearly": "Ежегодно",
+        "monthly": "Ежемесячно",
+        "weekly": "Еженедельно",
+        "none": "Без повторения"
+    }
+    rec_text = rec_text_map.get(rec_type, "Без повторения")
     
     # Получаем обновленное событие для возврата к меню редактирования
     event = await get_event_by_id(event_id)
     if event:
-        current_rec = event.get('recurrence', None)
-        text = f"<b>Периодичность изменена на: {rec_text}</b>"
+        current_date = event.get('date_str', 'не указана')
+        current_desc = event.get('description', 'не указано')
+        current_rec = event.get('recurrence', None) or 'нет'
+        rec_display = {'yearly': 'Ежегодно', 'monthly': 'Ежемесячно', 'weekly': 'Еженедельно', 'нет': 'Без повторения', None: 'Без повторения'}.get(current_rec, 'Без повторения')
+        
+        text = f"<b>✏️ Редактирование события:</b>\n\n"
+        text += f"<b>Описание:</b> {current_desc}\n"
+        text += f"<b>Дата:</b> {current_date}\n"
+        text += f"<b>Периодичность:</b> {rec_display}\n\n"
+        text += "Выберите параметр для изменения:"
+        
         try:
             await callback.message.edit_text(text, parse_mode="HTML", reply_markup=get_event_edit_menu(str(event['_id'])))
         except Exception:
