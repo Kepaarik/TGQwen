@@ -102,10 +102,11 @@ def get_events_select_menu(events, action: str):
 
 def get_event_edit_menu(event_id):
     builder = InlineKeyboardBuilder()
-    builder.row(InlineKeyboardButton(text="\u270E Изменить дату", callback_data=f"ev_edit_date_{event_id}"))
-    builder.row(InlineKeyboardButton(text="\u270E Изменить описание", callback_data=f"ev_edit_desc_{event_id}"))
-    builder.row(InlineKeyboardButton(text="\u270E Изменить периодичность", callback_data=f"ev_edit_rec_{event_id}"))
-    builder.row(InlineKeyboardButton(text="\u2190 Отмена", callback_data="extra_events"))
+    builder.row(InlineKeyboardButton(text="✎ Изменить дату", callback_data=f"ev_edit_date_{event_id}"))
+    builder.row(InlineKeyboardButton(text="✎ Изменить описание", callback_data=f"ev_edit_desc_{event_id}"))
+    builder.row(InlineKeyboardButton(text="✎ Изменить периодичность", callback_data=f"ev_edit_rec_{event_id}"))
+    builder.row(InlineKeyboardButton(text="⏰ Изменить время поздравления", callback_data=f"ev_edit_time_{event_id}"))
+    builder.row(InlineKeyboardButton(text="← Отмена", callback_data="extra_events"))
     return builder.as_markup()
 
 def get_recurrence_menu(event_id, current_rec):
