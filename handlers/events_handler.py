@@ -5,6 +5,9 @@ from handlers.states import EventState, EditEventState
 from database.events_db import get_all_events, add_event, get_event_by_id, update_event, delete_event, set_greeting_time
 from services.date_utils import get_days_until, format_date_fancy
 import asyncio
+import logging
+
+logger = logging.getLogger(__name__)
 
 router = Router()
 
@@ -242,7 +245,7 @@ async def start_edit_rec(callback: types.CallbackQuery):
     await callback.answer()
 
 @router.callback_query(F.data.startswith("ev_edit_time_"))
-async def start_edit_greeting_time(callback: types.CallbackQuery):
+async def start_edit_greeting_time(callback: types.CallbackQuery, state: FSMContext):
     """Начать редактирование времени отправки поздравления"""
     event_id = callback.data.replace("ev_edit_time_", "")
     event = await get_event_by_id(event_id)
@@ -251,14 +254,28 @@ async def start_edit_greeting_time(callback: types.CallbackQuery):
         return
     
     current_time = event.get('greeting_time', '09:00')
-    await callback.message.edit_text(
+    
+    text = (
         f"<b>Редактирование времени поздравления:</b>\n\n"
         f"Текущее время: {current_time}\n\n"
-        f"Введите новое время в формате ЧЧ:ММ (например, 08:30 или 14:00):",
-        parse_mode="HTML",
-        reply_markup=get_cancel_keyboard(f"ev_manage_{event_id}")
+        f"Введите новое время в формате ЧЧ:ММ (например, 08:30 или 14:00):"
     )
-    await state.update_data(event_id=event_id)
+    
+    try:
+        msg = await callback.message.edit_text(
+            text,
+            parse_mode="HTML",
+            reply_markup=get_cancel_keyboard(f"ev_manage_{event_id}")
+        )
+        await state.update_data(event_id=event_id, old_message_id=msg.message_id)
+    except Exception:
+        msg = await callback.message.answer(
+            text,
+            parse_mode="HTML",
+            reply_markup=get_cancel_keyboard(f"ev_manage_{event_id}")
+        )
+        await state.update_data(event_id=event_id, old_message_id=msg.message_id)
+    
     await state.set_state(EditEventState.wait_new_greeting_time)
     await callback.answer()
 
@@ -284,6 +301,7 @@ async def process_new_greeting_time(message: types.Message, state: FSMContext):
     
     data = await state.get_data()
     event_id = data['event_id']
+    old_message_id = data.get('old_message_id')
     
     # Удаляем сообщение пользователя
     try:
@@ -293,12 +311,23 @@ async def process_new_greeting_time(message: types.Message, state: FSMContext):
     
     await set_greeting_time(event_id, time_str)
     
-    # Возвращаемся к меню редактирования события
+    # Обновляем сообщение бота с новым временем
     text = f"<b>Время обновлено!</b>\n\nНовое время: {time_str}"
     try:
+        if old_message_id:
+            await message.bot.edit_message_text(
+                chat_id=message.chat.id,
+                message_id=old_message_id,
+                text=text,
+                parse_mode="HTML",
+                reply_markup=get_event_edit_menu(event_id)
+            )
+        else:
+            await message.answer(text, parse_mode="HTML", reply_markup=get_event_edit_menu(event_id))
+    except Exception as e:
+        logger.warning(f"Не удалось обновить сообщение бота: {e}")
         await message.answer(text, parse_mode="HTML", reply_markup=get_event_edit_menu(event_id))
-    except Exception:
-        await message.answer(text, parse_mode="HTML", reply_markup=get_event_edit_menu(event_id))
+    
     await state.clear()
 
 @router.callback_query(F.data.startswith("ev_set_rec_"))
