@@ -3,7 +3,7 @@ from aiogram.fsm.context import FSMContext
 from keyboards.inline_kb import get_events_menu, get_extra_menu, get_events_list_menu, get_events_select_menu, get_event_edit_menu, get_recurrence_menu
 from handlers.states import EventState, EditEventState
 from database.events_db import get_all_events, add_event, get_event_by_id, update_event, delete_event
-from services.date_utils import get_days_until, format_date_fancy
+from services.date_utils import get_days_until, format_date_fancy, get_next_occurrence_days
 import asyncio
 
 router = Router()
@@ -15,7 +15,7 @@ async def show_events_page(callback: types.CallbackQuery, page: int = 0):
     evs = await get_all_events()
     
     if not evs:
-        text = "<b>📅 Список событий:</b>\n\nСписок событий пуст."
+        text = "<b>Список событий:</b>\n\nСписок событий пуст."
         try:
             await callback.message.edit_text(text, parse_mode="HTML", reply_markup=get_events_menu())
         except Exception:
@@ -28,13 +28,15 @@ async def show_events_page(callback: types.CallbackQuery, page: int = 0):
     end_idx = min(start_idx + EVENTS_PER_PAGE, len(evs))
     page_events = evs[start_idx:end_idx]
     
-    text = "<b>📅 Список событий:</b>\n\n"
+    text = "<b>Список событий:</b>\n\n"
     for i, event in enumerate(page_events, start=start_idx + 1):
         rec = event.get('recurrence', 'нет') or 'нет'
-        days_left = get_days_until(event['date_str']) or '—'
+        days_left = get_days_until(event['date_str'], rec)
         text += f"<b>{i}.</b> {event['description']}\n"
-        text += f"   🗓 Дата: {event['date_str']} | 🔁 {rec}\n"
-        text += f"   ⏳ Дней осталось: {days_left}\n\n"
+        text += f"   Дата: {event['date_str']} | Периодичность: {rec}\n"
+        if rec != 'нет' and days_left:
+            text += f"   Дней осталось: {days_left}\n"
+        text += "\n"
     
     try:
         await callback.message.edit_text(
