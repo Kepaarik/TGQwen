@@ -1,6 +1,7 @@
 import asyncio
 import logging
 import os
+import random
 from aiogram import Bot, Dispatcher
 from aiogram.fsm.storage.memory import MemoryStorage
 from aiogram.client.default import DefaultBotProperties
@@ -31,13 +32,14 @@ async def start_fake_server():
     logger.info(f"Fake server started on port {PORT}")
 
 async def keep_alive():
-    """Пингует собственный URL каждые 5 секунд, чтобы Render не усыплял сервис."""
+    """Пингует собственный URL каждые 1-5 секунд (случайно), чтобы Render не усыплял сервис."""
     if not RENDER_URL:
         logger.warning("RENDER_URL не задан — keep-alive отключён.")
         return
-    logger.info(f"Keep-alive запущен, пингуем {RENDER_URL} каждые 5 сек.")
+    logger.info(f"Keep-alive запущен, пингуем {RENDER_URL} каждые 1-5 сек (случайно).")
     while True:
-        await asyncio.sleep(5)
+        delay = random.uniform(1, 5)
+        await asyncio.sleep(delay)
         try:
             async with aiohttp.ClientSession() as session:
                 async with session.get(RENDER_URL, timeout=aiohttp.ClientTimeout(total=10)) as resp:
