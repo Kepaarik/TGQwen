@@ -1,8 +1,8 @@
 from aiogram import Router, types, F
 from aiogram.fsm.context import FSMContext
-from keyboards.inline_kb import get_events_menu, get_extra_menu
-from handlers.states import EventState
-from database.events_db import get_all_events, add_event
+from keyboards.inline_kb import get_events_menu, get_extra_menu, get_event_list_menu, get_event_edit_menu, get_recurrence_menu
+from handlers.states import EventState, EditEventState
+from database.events_db import get_all_events, add_event, get_event_by_id, update_event, delete_event
 from services.date_utils import get_days_until, format_date_fancy
 import asyncio
 
@@ -13,14 +13,105 @@ async def show_events(callback: types.CallbackQuery):
     evs = await get_all_events()
     if not evs:
         text = "Список событий пуст."
+        await callback.message.edit_text(text, parse_mode="HTML", reply_markup=get_events_menu())
     else:
-        res = ["<b>Ближайшие события:</b>\n"]
-        for e in evs:
-            days_left = get_days_until(e['date_str'])
-            res.append(f"<b>{format_date_fancy(e['date_str'])}</b>: {e['description']}\n   └ <i>{days_left or ''}</i>")
-        text = "\n\n".join(res)
-        
-    await callback.message.edit_text(text, parse_mode="HTML", reply_markup=get_events_menu())
+        text = "<b>Управление событиями:</b>\nВыберите событие для редактирования или удаления:"
+        await callback.message.edit_text(text, parse_mode="HTML", reply_markup=get_event_list_menu(evs))
+    await callback.answer()
+
+@router.callback_query(F.data == "extra_events_list")
+async def show_events_list(callback: types.CallbackQuery):
+    evs = await get_all_events()
+    if not evs:
+        text = "Список событий пуст."
+        await callback.message.edit_text(text, parse_mode="HTML", reply_markup=get_events_menu())
+    else:
+        text = "<b>Управление событиями:</b>\nВыберите событие для редактирования или удаления:"
+        await callback.message.edit_text(text, parse_mode="HTML", reply_markup=get_event_list_menu(evs))
+    await callback.answer()
+
+@router.callback_query(F.data.startswith("ev_manage_"))
+async def manage_event(callback: types.CallbackQuery):
+    event_id = callback.data.replace("ev_manage_", "")
+    event = await get_event_by_id(event_id)
+    if not event:
+        await callback.answer("Событие не найдено.", show_alert=True)
+        return
+    
+    rec = event.get('recurrence', 'нет') or 'нет'
+    text = (
+        f"<b>📅 Событие:</b> {event['description']}\n"
+        f"<b>Дата:</b> {event['date_str']}\n"
+        f"<b>Периодичность:</b> {rec}\n"
+        f"<b>Дней осталось:</b> {get_days_until(event['date_str']) or '—'}\n\n"
+        f"Выберите действие:"
+    )
+    await callback.message.edit_text(text, parse_mode="HTML", reply_markup=get_event_edit_menu(event_id))
+    await callback.answer()
+
+@router.callback_query(F.data.startswith("ev_edit_date_"))
+async def start_edit_date(callback: types.CallbackQuery, state: FSMContext):
+    event_id = callback.data.replace("ev_edit_date_", "")
+    await state.update_data(event_id=event_id)
+    await state.set_state(EditEventState.wait_new_date)
+    await callback.message.edit_text("Введите новую дату события в формате ДД.ММ:")
+    await callback.answer()
+
+@router.message(EditEventState.wait_new_date, F.text)
+async def process_new_date(message: types.Message, state: FSMContext):
+    date_str = message.text.strip()
+    if "." not in date_str:
+        await message.answer("Ошибка: неправильный формат. Введите ДД.ММ:")
+        return
+    
+    data = await state.get_data()
+    event_id = data['event_id']
+    await update_event(event_id, {"date_str": date_str})
+    await message.answer("Дата обновлена!", reply_markup=get_event_edit_menu(event_id))
+    await state.clear()
+
+@router.callback_query(F.data.startswith("ev_edit_desc_"))
+async def start_edit_desc(callback: types.CallbackQuery, state: FSMContext):
+    event_id = callback.data.replace("ev_edit_desc_", "")
+    await state.update_data(event_id=event_id)
+    await state.set_state(EditEventState.wait_new_desc)
+    await callback.message.edit_text("Введите новое описание события:")
+    await callback.answer()
+
+@router.message(EditEventState.wait_new_desc, F.text)
+async def process_new_desc(message: types.Message, state: FSMContext):
+    desc = message.text.strip()
+    data = await state.get_data()
+    event_id = data['event_id']
+    await update_event(event_id, {"description": desc})
+    await message.answer("Описание обновлено!", reply_markup=get_event_edit_menu(event_id))
+    await state.clear()
+
+@router.callback_query(F.data.startswith("ev_edit_rec_"))
+async def start_edit_rec(callback: types.CallbackQuery):
+    event_id = callback.data.replace("ev_edit_rec_", "")
+    await callback.message.edit_text("Выберите новую периодичность:", reply_markup=get_recurrence_menu(event_id))
+    await callback.answer()
+
+@router.callback_query(F.data.startswith("ev_set_rec_"))
+async def set_recurrence(callback: types.CallbackQuery):
+    parts = callback.data.split("_")
+    # ev_set_rec_yearly_EVENTID
+    rec_type = parts[4]  # yearly, monthly, weekly, none
+    event_id = "_".join(parts[5:])  # на случай если в ID есть подчеркивания
+    
+    rec_map = {
+        "yearly": "yearly",
+        "monthly": "monthly",
+        "weekly": "weekly",
+        "none": None
+    }
+    
+    rec_value = rec_map.get(rec_type)
+    await update_event(event_id, {"recurrence": rec_value})
+    
+    rec_text = rec_value or "без повторения"
+    await callback.message.edit_text(f"Периодичность изменена на: {rec_text}", reply_markup=get_event_edit_menu(event_id))
     await callback.answer()
 
 @router.callback_query(F.data == "event_add")
@@ -52,7 +143,6 @@ async def process_event_desc(message: types.Message, state: FSMContext):
 
 from aiogram.filters import Command
 from config import ADMIN_ID
-from database.events_db import delete_event
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 from aiogram.types import InlineKeyboardButton
 
@@ -81,5 +171,5 @@ async def process_del_event(callback: types.CallbackQuery):
         
     event_id = callback.data.replace("del_ev_", "")
     await delete_event(event_id)
-    await callback.message.edit_text(f"Событие удалено.")
+    await callback.message.edit_text(f"Событие удалено.", reply_markup=get_events_menu())
     await callback.answer()
