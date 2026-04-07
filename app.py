@@ -63,6 +63,9 @@ async def main():
     bot = Bot(token=BOT_TOKEN, default=DefaultBotProperties(parse_mode=ParseMode.HTML))
     dp = Dispatcher(storage=MemoryStorage())
 
+    # Устанавливаем ссылку на бота для использования в хендлерах
+    common.set_bot_ref(bot)
+
     # Register routers
     dp.include_router(common.router)
     dp.include_router(transactions.router)
