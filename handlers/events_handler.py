@@ -16,7 +16,10 @@ async def show_events_page(callback: types.CallbackQuery, page: int = 0):
     
     if not evs:
         text = "<b>📅 Список событий:</b>\n\nСписок событий пуст."
-        await callback.message.edit_text(text, parse_mode="HTML", reply_markup=get_events_menu())
+        try:
+            await callback.message.edit_text(text, parse_mode="HTML", reply_markup=get_events_menu())
+        except Exception:
+            await callback.message.answer(text, parse_mode="HTML", reply_markup=get_events_menu())
         return
     
     total_pages = (len(evs) + EVENTS_PER_PAGE - 1) // EVENTS_PER_PAGE
@@ -33,11 +36,19 @@ async def show_events_page(callback: types.CallbackQuery, page: int = 0):
         text += f"   🗓 Дата: {event['date_str']} | 🔁 {rec}\n"
         text += f"   ⏳ Дней осталось: {days_left}\n\n"
     
-    await callback.message.edit_text(
-        text, 
-        parse_mode="HTML", 
-        reply_markup=get_event_list_with_actions(evs, page, total_pages)
-    )
+    try:
+        await callback.message.edit_text(
+            text, 
+            parse_mode="HTML", 
+            reply_markup=get_event_list_with_actions(evs, page, total_pages)
+        )
+    except Exception as e:
+        # Если редактирование не удалось, отправляем новое сообщение
+        await callback.message.answer(
+            text, 
+            parse_mode="HTML", 
+            reply_markup=get_event_list_with_actions(evs, page, total_pages)
+        )
 
 @router.callback_query(F.data == "extra_events")
 async def show_events(callback: types.CallbackQuery):
