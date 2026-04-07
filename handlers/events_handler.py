@@ -1,6 +1,6 @@
 from aiogram import Router, types, F
 from aiogram.fsm.context import FSMContext
-from keyboards.inline_kb import get_events_menu, get_extra_menu, get_events_list_menu, get_events_select_menu, get_event_edit_menu, get_recurrence_menu
+from keyboards.inline_kb import get_events_menu, get_extra_menu, get_events_list_menu, get_events_select_menu, get_event_edit_menu, get_recurrence_menu, get_cancel_keyboard
 from handlers.states import EventState, EditEventState
 from database.events_db import get_all_events, add_event, get_event_by_id, update_event, delete_event
 from services.date_utils import get_days_until, format_date_fancy
@@ -142,13 +142,12 @@ async def start_edit_date(callback: types.CallbackQuery, state: FSMContext):
     await state.update_data(event_id=event_id, old_message_id=callback.message.message_id)
     await state.set_state(EditEventState.wait_new_date)
     
-    text = f"<b>Редактирование даты:</b>\n\nТекущая дата: {current_date}\n\nВведите новую дату события в формате ДД.ММ:\n\n\u2190 Нажмите 'Отмена' для возврата."
+    text = f"<b>Редактирование даты:</b>\n\nТекущая дата: {current_date}\n\nВведите новую дату события в формате ДД.ММ:"
     try:
-        msg = await callback.message.edit_text(text, parse_mode="HTML")
-        # Сохраняем ID сообщения для последующего удаления ввода пользователя
+        msg = await callback.message.edit_text(text, parse_mode="HTML", reply_markup=get_cancel_keyboard(f"ev_manage_{event_id}"))
         await state.update_data(event_id=event_id, old_message_id=msg.message_id)
     except Exception:
-        msg = await callback.message.answer(text, parse_mode="HTML")
+        msg = await callback.message.answer(text, parse_mode="HTML", reply_markup=get_cancel_keyboard(f"ev_manage_{event_id}"))
         await state.update_data(event_id=event_id, old_message_id=msg.message_id)
     await callback.answer()
 
@@ -191,12 +190,12 @@ async def start_edit_desc(callback: types.CallbackQuery, state: FSMContext):
     await state.update_data(event_id=event_id, old_message_id=callback.message.message_id)
     await state.set_state(EditEventState.wait_new_desc)
     
-    text = f"<b>Редактирование описания:</b>\n\nТекущее описание: {current_desc}\n\nВведите новое описание события:\n\n\u2190 Нажмите 'Отмена' для возврата."
+    text = f"<b>Редактирование описания:</b>\n\nТекущее описание: {current_desc}\n\nВведите новое описание события:"
     try:
-        msg = await callback.message.edit_text(text, parse_mode="HTML")
+        msg = await callback.message.edit_text(text, parse_mode="HTML", reply_markup=get_cancel_keyboard(f"ev_manage_{event_id}"))
         await state.update_data(event_id=event_id, old_message_id=msg.message_id)
     except Exception:
-        msg = await callback.message.answer(text, parse_mode="HTML")
+        msg = await callback.message.answer(text, parse_mode="HTML", reply_markup=get_cancel_keyboard(f"ev_manage_{event_id}"))
         await state.update_data(event_id=event_id, old_message_id=msg.message_id)
     await callback.answer()
 
@@ -315,19 +314,19 @@ async def back_to_edit_menu(callback: types.CallbackQuery):
 @router.callback_query(F.data == "event_add")
 async def start_add_event(callback: types.CallbackQuery, state: FSMContext):
     await state.set_state(EventState.wait_date)
-    await callback.message.edit_text("Введите дату события в формате ДД.ММ (например, 31.12):")
+    await callback.message.edit_text("Введите дату события в формате ДД.ММ (например, 31.12):", reply_markup=get_cancel_keyboard("extra_events"))
     await callback.answer()
 
 @router.message(EventState.wait_date, F.text)
 async def process_event_date(message: types.Message, state: FSMContext):
     date_str = message.text.strip()
     if "." not in date_str:
-        await message.answer("Ошибка: неправильный формат. Введите ДД.ММ:")
+        await message.answer("Ошибка: неправильный формат. Введите ДД.ММ:", reply_markup=get_cancel_keyboard("extra_events"))
         return
         
     await state.update_data(date=date_str)
     await state.set_state(EventState.wait_desc)
-    await message.answer("Введите описание события:")
+    await message.answer("Введите описание события:", reply_markup=get_cancel_keyboard("extra_events"))
 
 @router.message(EventState.wait_desc, F.text)
 async def process_event_desc(message: types.Message, state: FSMContext):
