@@ -85,7 +85,7 @@ def get_event_list_with_actions(events, page: int, total_pages: int):
     
     # Кнопки действий
     builder.row(InlineKeyboardButton(text="+ Добавить", callback_data="event_add"))
-    builder.row(InlineKeyboardButton(text="← Назад", callback_data="extra_events"))
+    builder.row(InlineKeyboardButton(text="← В главное меню", callback_data="menu_back_main"))
     
     return builder.as_markup()
 
