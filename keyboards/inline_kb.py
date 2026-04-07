@@ -54,3 +54,33 @@ def get_events_menu():
         InlineKeyboardButton(text="✕ Закрыть", callback_data="menu_close")
     )
     return builder.as_markup()
+
+def get_event_list_menu(events):
+    builder = InlineKeyboardBuilder()
+    for e in events[:10]:
+        desc = e['description'][:25]
+        rec = e.get('recurrence', 'нет')
+        builder.row(InlineKeyboardButton(
+            text=f"📅 {desc} ({rec})",
+            callback_data=f"ev_manage_{str(e['_id'])}"
+        ))
+    builder.row(InlineKeyboardButton(text="← Назад", callback_data="extra_events"))
+    return builder.as_markup()
+
+def get_event_edit_menu(event_id):
+    builder = InlineKeyboardBuilder()
+    builder.row(InlineKeyboardButton(text="✏️ Изменить дату", callback_data=f"ev_edit_date_{event_id}"))
+    builder.row(InlineKeyboardButton(text="✏️ Изменить описание", callback_data=f"ev_edit_desc_{event_id}"))
+    builder.row(InlineKeyboardButton(text="✏️ Изменить периодичность", callback_data=f"ev_edit_rec_{event_id}"))
+    builder.row(InlineKeyboardButton(text="🗑️ Удалить", callback_data=f"del_ev_{event_id}"))
+    builder.row(InlineKeyboardButton(text="← Назад", callback_data="extra_events_list"))
+    return builder.as_markup()
+
+def get_recurrence_menu(event_id):
+    builder = InlineKeyboardBuilder()
+    builder.row(InlineKeyboardButton(text="Ежегодно", callback_data=f"ev_set_rec_yearly_{event_id}"))
+    builder.row(InlineKeyboardButton(text="Ежемесячно", callback_data=f"ev_set_rec_monthly_{event_id}"))
+    builder.row(InlineKeyboardButton(text="Еженедельно", callback_data=f"ev_set_rec_weekly_{event_id}"))
+    builder.row(InlineKeyboardButton(text="Без повторения", callback_data=f"ev_set_rec_none_{event_id}"))
+    builder.row(InlineKeyboardButton(text="← Отмена", callback_data=f"ev_manage_{event_id}"))
+    return builder.as_markup()

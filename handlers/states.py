@@ -7,3 +7,8 @@ class TransactionState(StatesGroup):
 class EventState(StatesGroup):
     wait_date = State()
     wait_desc = State()
+
+class EditEventState(StatesGroup):
+    wait_new_date = State()
+    wait_new_desc = State()
+    wait_new_recurrence = State()
