@@ -3,7 +3,7 @@ from aiogram.fsm.context import FSMContext
 from keyboards.inline_kb import get_events_menu, get_extra_menu, get_events_list_menu, get_events_select_menu, get_event_edit_menu, get_recurrence_menu
 from handlers.states import EventState, EditEventState
 from database.events_db import get_all_events, add_event, get_event_by_id, update_event, delete_event
-from services.date_utils import get_days_until, format_date_fancy, get_next_occurrence_days
+from services.date_utils import get_days_until, format_date_fancy
 import asyncio
 
 router = Router()
