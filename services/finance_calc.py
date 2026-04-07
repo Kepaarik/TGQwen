@@ -23,7 +23,10 @@ async def get_personal_wallet_text(user_id: int):
         else:
             if rates:
                 r = rates.get(curr, 0)
-                lines.append(f"• {curr}: {bal:.2f} {symbol} (1{symbol}={r:.2f}Br)")
+                if curr == "CNY":
+                    lines.append(f"• {curr}: {bal:.2f} {symbol} (10{symbol}={r*10:.2f}Br)")
+                else:
+                    lines.append(f"• {curr}: {bal:.2f} {symbol} (1{symbol}={r:.2f}Br)")
             else:
                 lines.append(f"• {curr}: {bal:.2f} {symbol}")
         
@@ -62,7 +65,10 @@ async def format_balance_tree(user_id=None):
                     lines.append(f"  ┗ BYN: <code>{val:,.2f}</code> Br")
                 else:
                     r = rates.get(cur, 0)
-                    lines.append(f"  ┗ {cur}: <code>{val:,.2f}</code> {symbol} (1{symbol}={r:.2f}Br)")
+                    if cur == "CNY":
+                        lines.append(f"  ┗ {cur}: <code>{val:,.2f}</code> {symbol} (10{symbol}={r*10:.2f}Br)")
+                    else:
+                        lines.append(f"  ┗ {cur}: <code>{val:,.2f}</code> {symbol} (1{symbol}={r:.2f}Br)")
     
     lines.append(f"\n<b>Итого:</b> <code>{total_all_byn:,.2f} BYN</code>")
     return "\n".join(lines)
