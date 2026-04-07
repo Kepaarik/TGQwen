@@ -104,6 +104,32 @@ async def select_event_to_delete(callback: types.CallbackQuery):
         await callback.message.answer(text, parse_mode="HTML", reply_markup=get_events_select_menu(evs, "del"))
     await callback.answer()
 
+@router.callback_query(F.data.startswith("ev_select_edit_"))
+async def show_edit_options(callback: types.CallbackQuery):
+    """Показать меню выбора параметра для редактирования после выбора события"""
+    event_id = callback.data.replace("ev_select_edit_", "")
+    event = await get_event_by_id(event_id)
+    if not event:
+        await callback.answer("Событие не найдено.", show_alert=True)
+        return
+    
+    current_date = event.get('date_str', 'не указана')
+    current_desc = event.get('description', 'не указано')
+    current_rec = event.get('recurrence', None) or 'нет'
+    rec_text = {'yearly': 'Ежегодно', 'monthly': 'Ежемесячно', 'weekly': 'Еженедельно', 'нет': 'Без повторения', None: 'Без повторения'}.get(current_rec, 'Без повторения')
+    
+    text = f"<b>✏️ Редактирование события:</b>\n\n"
+    text += f"<b>Описание:</b> {current_desc}\n"
+    text += f"<b>Дата:</b> {current_date}\n"
+    text += f"<b>Периодичность:</b> {rec_text}\n\n"
+    text += "Выберите параметр для изменения:"
+    
+    try:
+        await callback.message.edit_text(text, parse_mode="HTML", reply_markup=get_event_edit_menu(event_id))
+    except Exception:
+        await callback.message.answer(text, parse_mode="HTML", reply_markup=get_event_edit_menu(event_id))
+    await callback.answer()
+
 @router.callback_query(F.data.startswith("ev_edit_date_"))
 async def start_edit_date(callback: types.CallbackQuery, state: FSMContext):
     event_id = callback.data.replace("ev_edit_date_", "")
@@ -113,14 +139,17 @@ async def start_edit_date(callback: types.CallbackQuery, state: FSMContext):
         return
     
     current_date = event.get('date_str', 'не указана')
-    await state.update_data(event_id=event_id)
+    await state.update_data(event_id=event_id, old_message_id=callback.message.message_id)
     await state.set_state(EditEventState.wait_new_date)
     
-    text = f"<b>Редактирование даты:</b>\n\nТекущая дата: {current_date}\n\nВведите новую дату события в формате ДД.ММ:"
+    text = f"<b>Редактирование даты:</b>\n\nТекущая дата: {current_date}\n\nВведите новую дату события в формате ДД.ММ:\n\n\u2190 Нажмите 'Отмена' для возврата."
     try:
-        await callback.message.edit_text(text, parse_mode="HTML")
+        msg = await callback.message.edit_text(text, parse_mode="HTML")
+        # Сохраняем ID сообщения для последующего удаления ввода пользователя
+        await state.update_data(event_id=event_id, old_message_id=msg.message_id)
     except Exception:
-        await callback.message.answer(text, parse_mode="HTML")
+        msg = await callback.message.answer(text, parse_mode="HTML")
+        await state.update_data(event_id=event_id, old_message_id=msg.message_id)
     await callback.answer()
 
 @router.message(EditEventState.wait_new_date, F.text)
@@ -132,11 +161,22 @@ async def process_new_date(message: types.Message, state: FSMContext):
     
     data = await state.get_data()
     event_id = data['event_id']
+    old_message_id = data.get('old_message_id')
+    
+    # Удаляем сообщение пользователя
+    try:
+        await message.delete()
+    except Exception:
+        pass
+    
     await update_event(event_id, {"date_str": date_str})
     
     # Возвращаемся к меню редактирования события
     text = f"<b>Дата обновлена!</b>\n\nНовая дата: {date_str}"
-    await message.answer(text, parse_mode="HTML", reply_markup=get_event_edit_menu(event_id))
+    try:
+        await message.answer(text, parse_mode="HTML", reply_markup=get_event_edit_menu(event_id))
+    except Exception:
+        await message.answer(text, parse_mode="HTML", reply_markup=get_event_edit_menu(event_id))
     await state.clear()
 
 @router.callback_query(F.data.startswith("ev_edit_desc_"))
@@ -148,14 +188,16 @@ async def start_edit_desc(callback: types.CallbackQuery, state: FSMContext):
         return
     
     current_desc = event.get('description', 'не указано')
-    await state.update_data(event_id=event_id)
+    await state.update_data(event_id=event_id, old_message_id=callback.message.message_id)
     await state.set_state(EditEventState.wait_new_desc)
     
-    text = f"<b>Редактирование описания:</b>\n\nТекущее описание: {current_desc}\n\nВведите новое описание события:"
+    text = f"<b>Редактирование описания:</b>\n\nТекущее описание: {current_desc}\n\nВведите новое описание события:\n\n\u2190 Нажмите 'Отмена' для возврата."
     try:
-        await callback.message.edit_text(text, parse_mode="HTML")
+        msg = await callback.message.edit_text(text, parse_mode="HTML")
+        await state.update_data(event_id=event_id, old_message_id=msg.message_id)
     except Exception:
-        await callback.message.answer(text, parse_mode="HTML")
+        msg = await callback.message.answer(text, parse_mode="HTML")
+        await state.update_data(event_id=event_id, old_message_id=msg.message_id)
     await callback.answer()
 
 @router.message(EditEventState.wait_new_desc, F.text)
@@ -163,11 +205,21 @@ async def process_new_desc(message: types.Message, state: FSMContext):
     desc = message.text.strip()
     data = await state.get_data()
     event_id = data['event_id']
+    
+    # Удаляем сообщение пользователя
+    try:
+        await message.delete()
+    except Exception:
+        pass
+    
     await update_event(event_id, {"description": desc})
     
     # Возвращаемся к меню редактирования события
     text = f"<b>Описание обновлено!</b>\n\nНовое описание: {desc}"
-    await message.answer(text, parse_mode="HTML", reply_markup=get_event_edit_menu(event_id))
+    try:
+        await message.answer(text, parse_mode="HTML", reply_markup=get_event_edit_menu(event_id))
+    except Exception:
+        await message.answer(text, parse_mode="HTML", reply_markup=get_event_edit_menu(event_id))
     await state.clear()
 
 @router.callback_query(F.data.startswith("ev_edit_rec_"))

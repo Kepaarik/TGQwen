@@ -86,7 +86,11 @@ def get_events_select_menu(events, action: str):
     
     for event in events:
         desc = event['description'][:25]
-        callback_action = "ev_edit_date" if action == "edit" else "del_ev"
+        if action == "edit":
+            # Для редактирования передаем ID события в меню выбора параметра
+            callback_action = "ev_select_edit"
+        else:
+            callback_action = "del_ev"
         builder.row(InlineKeyboardButton(
             text=f"{desc}",
             callback_data=f"{callback_action}_{str(event['_id'])}"
@@ -101,7 +105,7 @@ def get_event_edit_menu(event_id):
     builder.row(InlineKeyboardButton(text="\u270E Изменить дату", callback_data=f"ev_edit_date_{event_id}"))
     builder.row(InlineKeyboardButton(text="\u270E Изменить описание", callback_data=f"ev_edit_desc_{event_id}"))
     builder.row(InlineKeyboardButton(text="\u270E Изменить периодичность", callback_data=f"ev_edit_rec_{event_id}"))
-    builder.row(InlineKeyboardButton(text="\u2190 Назад к списку", callback_data="extra_events"))
+    builder.row(InlineKeyboardButton(text="\u2190 Отмена", callback_data="extra_events"))
     return builder.as_markup()
 
 def get_recurrence_menu(event_id, current_rec):
