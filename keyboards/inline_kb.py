@@ -117,3 +117,9 @@ def get_recurrence_menu(event_id, current_rec):
     builder.row(InlineKeyboardButton(text=f"\u221E Без повторения {('✓' if current_rec is None else '')}", callback_data=f"ev_set_rec_none_{event_id}"))
     builder.row(InlineKeyboardButton(text="\u2190 Отмена", callback_data=f"ev_manage_{event_id}"))
     return builder.as_markup()
+
+def get_cancel_keyboard(callback_data: str = "extra_events"):
+    """Клавиатура с кнопкой отмены/назад"""
+    builder = InlineKeyboardBuilder()
+    builder.row(InlineKeyboardButton(text="\u2190 Отмена", callback_data=callback_data))
+    return builder.as_markup()
