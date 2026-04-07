@@ -265,9 +265,9 @@ async def set_recurrence(callback: types.CallbackQuery):
         current_rec = event.get('recurrence', None)
         text = f"<b>Периодичность изменена на: {rec_text}</b>"
         try:
-            await callback.message.edit_text(text, parse_mode="HTML", reply_markup=get_event_edit_menu(event_id))
+            await callback.message.edit_text(text, parse_mode="HTML", reply_markup=get_event_edit_menu(str(event['_id'])))
         except Exception:
-            await callback.message.answer(text, parse_mode="HTML", reply_markup=get_event_edit_menu(event_id))
+            await callback.message.answer(text, parse_mode="HTML", reply_markup=get_event_edit_menu(str(event['_id'])))
     else:
         try:
             await callback.message.edit_text(f"Периодичность изменена на: {rec_text}", reply_markup=get_events_menu())

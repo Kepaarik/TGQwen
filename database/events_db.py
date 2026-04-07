@@ -29,10 +29,20 @@ async def update_last_event_check(date_str: str):
     )
 
 async def delete_event(event_id: str):
-    await events_col.delete_one({"_id": ObjectId(event_id)})
+    try:
+        await events_col.delete_one({"_id": ObjectId(event_id)})
+    except Exception:
+        # Если event_id уже является ObjectId или некорректен
+        await events_col.delete_one({"_id": event_id})
 
 async def get_event_by_id(event_id: str):
-    return await events_col.find_one({"_id": ObjectId(event_id)})
+    try:
+        return await events_col.find_one({"_id": ObjectId(event_id)})
+    except Exception:
+        return await events_col.find_one({"_id": event_id})
 
 async def update_event(event_id: str, updates: dict):
-    await events_col.update_one({"_id": ObjectId(event_id)}, {"$set": updates})
+    try:
+        await events_col.update_one({"_id": ObjectId(event_id)}, {"$set": updates})
+    except Exception:
+        await events_col.update_one({"_id": event_id}, {"$set": updates})
