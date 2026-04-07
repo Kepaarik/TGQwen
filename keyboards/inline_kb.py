@@ -62,10 +62,10 @@ def get_events_list_menu(page: int, total_pages: int):
     # Кнопки пагинации
     nav_buttons = []
     if page > 0:
-        nav_buttons.append(InlineKeyboardButton(text="◀️ Назад", callback_data=f"ev_page_{page - 1}"))
+        nav_buttons.append(InlineKeyboardButton(text="<< Назад", callback_data=f"ev_page_{page - 1}"))
     
     if page < total_pages - 1:
-        nav_buttons.append(InlineKeyboardButton(text="Вперёд ▶️", callback_data=f"ev_page_{page + 1}"))
+        nav_buttons.append(InlineKeyboardButton(text="Вперед >>", callback_data=f"ev_page_{page + 1}"))
     
     if nav_buttons:
         builder.row(*nav_buttons)
@@ -73,10 +73,10 @@ def get_events_list_menu(page: int, total_pages: int):
     # Кнопки действий
     builder.row(InlineKeyboardButton(text="+ Добавить", callback_data="event_add"))
     builder.row(
-        InlineKeyboardButton(text="✏️ Редактировать", callback_data="event_edit_select"),
-        InlineKeyboardButton(text="🗑️ Удалить", callback_data="event_del_select")
+        InlineKeyboardButton(text="Редактировать", callback_data="event_edit_select"),
+        InlineKeyboardButton(text="Удалить", callback_data="event_del_select")
     )
-    builder.row(InlineKeyboardButton(text="← В главное меню", callback_data="menu_back_main"))
+    builder.row(InlineKeyboardButton(text="<< В главное меню", callback_data="menu_back_main"))
     
     return builder.as_markup()
 
@@ -88,20 +88,20 @@ def get_events_select_menu(events, action: str):
         desc = event['description'][:25]
         callback_action = "ev_edit_date" if action == "edit" else "del_ev"
         builder.row(InlineKeyboardButton(
-            text=f"📅 {desc}",
+            text=f"{desc}",
             callback_data=f"{callback_action}_{str(event['_id'])}"
         ))
     
-    builder.row(InlineKeyboardButton(text="← Назад", callback_data="extra_events"))
+    builder.row(InlineKeyboardButton(text="<< Назад", callback_data="extra_events"))
     
     return builder.as_markup()
 
 def get_event_edit_menu(event_id):
     builder = InlineKeyboardBuilder()
-    builder.row(InlineKeyboardButton(text="✏️ Изменить дату", callback_data=f"ev_edit_date_{event_id}"))
-    builder.row(InlineKeyboardButton(text="✏️ Изменить описание", callback_data=f"ev_edit_desc_{event_id}"))
-    builder.row(InlineKeyboardButton(text="✏️ Изменить периодичность", callback_data=f"ev_edit_rec_{event_id}"))
-    builder.row(InlineKeyboardButton(text="← Назад к списку", callback_data="extra_events"))
+    builder.row(InlineKeyboardButton(text="Изменить дату", callback_data=f"ev_edit_date_{event_id}"))
+    builder.row(InlineKeyboardButton(text="Изменить описание", callback_data=f"ev_edit_desc_{event_id}"))
+    builder.row(InlineKeyboardButton(text="Изменить периодичность", callback_data=f"ev_edit_rec_{event_id}"))
+    builder.row(InlineKeyboardButton(text="<< Назад к списку", callback_data="extra_events"))
     return builder.as_markup()
 
 def get_recurrence_menu(event_id):
@@ -110,5 +110,5 @@ def get_recurrence_menu(event_id):
     builder.row(InlineKeyboardButton(text="Ежемесячно", callback_data=f"ev_set_rec_monthly_{event_id}"))
     builder.row(InlineKeyboardButton(text="Еженедельно", callback_data=f"ev_set_rec_weekly_{event_id}"))
     builder.row(InlineKeyboardButton(text="Без повторения", callback_data=f"ev_set_rec_none_{event_id}"))
-    builder.row(InlineKeyboardButton(text="← Отмена", callback_data=f"ev_manage_{event_id}"))
+    builder.row(InlineKeyboardButton(text="<< Отмена", callback_data=f"ev_manage_{event_id}"))
     return builder.as_markup()
