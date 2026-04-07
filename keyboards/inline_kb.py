@@ -62,10 +62,10 @@ def get_events_list_menu(page: int, total_pages: int):
     # Кнопки пагинации
     nav_buttons = []
     if page > 0:
-        nav_buttons.append(InlineKeyboardButton(text="\u25C0\u25C0 Назад", callback_data=f"ev_page_{page - 1}"))
+        nav_buttons.append(InlineKeyboardButton(text="\u2190 Назад", callback_data=f"ev_page_{page - 1}"))
     
     if page < total_pages - 1:
-        nav_buttons.append(InlineKeyboardButton(text="Вперед \u25B6\u25B6", callback_data=f"ev_page_{page + 1}"))
+        nav_buttons.append(InlineKeyboardButton(text="Вперед \u2192", callback_data=f"ev_page_{page + 1}"))
     
     if nav_buttons:
         builder.row(*nav_buttons)
@@ -98,17 +98,18 @@ def get_events_select_menu(events, action: str):
 
 def get_event_edit_menu(event_id):
     builder = InlineKeyboardBuilder()
-    builder.row(InlineKeyboardButton(text="Изменить дату", callback_data=f"ev_edit_date_{event_id}"))
-    builder.row(InlineKeyboardButton(text="Изменить описание", callback_data=f"ev_edit_desc_{event_id}"))
-    builder.row(InlineKeyboardButton(text="Изменить периодичность", callback_data=f"ev_edit_rec_{event_id}"))
+    builder.row(InlineKeyboardButton(text="\u270E Изменить дату", callback_data=f"ev_edit_date_{event_id}"))
+    builder.row(InlineKeyboardButton(text="\u270E Изменить описание", callback_data=f"ev_edit_desc_{event_id}"))
+    builder.row(InlineKeyboardButton(text="\u270E Изменить периодичность", callback_data=f"ev_edit_rec_{event_id}"))
     builder.row(InlineKeyboardButton(text="\u2190 Назад к списку", callback_data="extra_events"))
     return builder.as_markup()
 
-def get_recurrence_menu(event_id):
+def get_recurrence_menu(event_id, current_rec):
     builder = InlineKeyboardBuilder()
-    builder.row(InlineKeyboardButton(text="Ежегодно", callback_data=f"ev_set_rec_yearly_{event_id}"))
-    builder.row(InlineKeyboardButton(text="Ежемесячно", callback_data=f"ev_set_rec_monthly_{event_id}"))
-    builder.row(InlineKeyboardButton(text="Еженедельно", callback_data=f"ev_set_rec_weekly_{event_id}"))
-    builder.row(InlineKeyboardButton(text="Без повторения", callback_data=f"ev_set_rec_none_{event_id}"))
+    rec_symbol = {'yearly': '\U0001F4C5', 'monthly': '\U0001F5D3', 'weekly': '\U0001F4C6', None: '\u221E'}.get(current_rec, '\u221E')
+    builder.row(InlineKeyboardButton(text=f"\U0001F4C5 Ежегодно {('✓' if current_rec == 'yearly' else '')}", callback_data=f"ev_set_rec_yearly_{event_id}"))
+    builder.row(InlineKeyboardButton(text=f"\U0001F5D3 Ежемесячно {('✓' if current_rec == 'monthly' else '')}", callback_data=f"ev_set_rec_monthly_{event_id}"))
+    builder.row(InlineKeyboardButton(text=f"\U0001F4C6 Еженедельно {('✓' if current_rec == 'weekly' else '')}", callback_data=f"ev_set_rec_weekly_{event_id}"))
+    builder.row(InlineKeyboardButton(text=f"\u221E Без повторения {('✓' if current_rec is None else '')}", callback_data=f"ev_set_rec_none_{event_id}"))
     builder.row(InlineKeyboardButton(text="\u2190 Отмена", callback_data=f"ev_manage_{event_id}"))
     return builder.as_markup()
