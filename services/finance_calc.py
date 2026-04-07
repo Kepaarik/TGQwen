@@ -12,12 +12,20 @@ async def get_personal_wallet_text(user_id: int):
             amt = t["amount"]
             if cur in balances:
                 balances[cur] += amt
-                
+    
+    rates = get_cached_rates()
     lines = ["◆ <b>Баланс</b>\n"]
     for curr in AVAILABLE_CURRENCIES:
         symbol = CURRENCY_SYMBOLS[curr]
         bal = balances[curr]
-        lines.append(f"• {curr}: {bal:.2f} {symbol}")
+        if curr == "BYN":
+            lines.append(f"• {curr}: {bal:.2f} Br")
+        else:
+            if rates:
+                r = rates.get(curr, 0)
+                lines.append(f"• {curr}: {bal:.2f} {symbol} (1{symbol}={r:.2f}Br)")
+            else:
+                lines.append(f"• {curr}: {bal:.2f} {symbol}")
         
     return "\n".join(lines)
 
@@ -49,11 +57,12 @@ async def format_balance_tree(user_id=None):
             lines.append(f"<b>{data['name']}</b>")
             for cur in sorted(active.keys()):
                 val = active[cur]
+                symbol = CURRENCY_SYMBOLS.get(cur, cur)
                 if cur == "BYN":
-                    lines.append(f"  ┗ BYN: <code>{val:,.2f}</code>")
+                    lines.append(f"  ┗ BYN: <code>{val:,.2f}</code> Br")
                 else:
                     r = rates.get(cur, 0)
-                    lines.append(f"  ┗ {cur}: <code>{val:,.2f}</code> <i>(~{val*r:,.2f} BYN)</i>")
+                    lines.append(f"  ┗ {cur}: <code>{val:,.2f}</code> {symbol} (1{symbol}={r:.2f}Br)")
     
     lines.append(f"\n<b>Итого:</b> <code>{total_all_byn:,.2f} BYN</code>")
     return "\n".join(lines)
