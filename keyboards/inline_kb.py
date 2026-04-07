@@ -55,16 +55,38 @@ def get_events_menu():
     )
     return builder.as_markup()
 
-def get_event_list_menu(events):
+def get_event_list_with_actions(events, page: int, total_pages: int):
+    """Список событий с кнопками действий и пагинацией"""
     builder = InlineKeyboardBuilder()
-    for e in events[:10]:
-        desc = e['description'][:25]
-        rec = e.get('recurrence', 'нет')
+    
+    # Кнопки для каждого события на текущей странице
+    EVENTS_PER_PAGE = 5
+    start_idx = page * EVENTS_PER_PAGE
+    end_idx = min(start_idx + EVENTS_PER_PAGE, len(events))
+    page_events = events[start_idx:end_idx]
+    
+    for event in page_events:
+        desc = event['description'][:25]
         builder.row(InlineKeyboardButton(
-            text=f"📅 {desc} ({rec})",
-            callback_data=f"ev_manage_{str(e['_id'])}"
+            text=f"📅 {desc}",
+            callback_data=f"ev_manage_{str(event['_id'])}"
         ))
+    
+    # Кнопки пагинации
+    nav_buttons = []
+    if page > 0:
+        nav_buttons.append(InlineKeyboardButton(text="◀️ Назад", callback_data=f"ev_page_{page - 1}"))
+    
+    if page < total_pages - 1:
+        nav_buttons.append(InlineKeyboardButton(text="Вперёд ▶️", callback_data=f"ev_page_{page + 1}"))
+    
+    if nav_buttons:
+        builder.row(*nav_buttons)
+    
+    # Кнопки действий
+    builder.row(InlineKeyboardButton(text="+ Добавить", callback_data="event_add"))
     builder.row(InlineKeyboardButton(text="← Назад", callback_data="extra_events"))
+    
     return builder.as_markup()
 
 def get_event_edit_menu(event_id):

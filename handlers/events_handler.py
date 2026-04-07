@@ -1,6 +1,6 @@
 from aiogram import Router, types, F
 from aiogram.fsm.context import FSMContext
-from keyboards.inline_kb import get_events_menu, get_extra_menu, get_event_list_menu, get_event_edit_menu, get_recurrence_menu
+from keyboards.inline_kb import get_events_menu, get_extra_menu, get_event_list_with_actions, get_event_edit_menu, get_recurrence_menu
 from handlers.states import EventState, EditEventState
 from database.events_db import get_all_events, add_event, get_event_by_id, update_event, delete_event
 from services.date_utils import get_days_until, format_date_fancy
@@ -8,26 +8,51 @@ import asyncio
 
 router = Router()
 
+EVENTS_PER_PAGE = 5
+
+async def show_events_page(callback: types.CallbackQuery, page: int = 0):
+    """Показать страницу списка событий с кнопками действий"""
+    evs = await get_all_events()
+    
+    if not evs:
+        text = "<b>📅 Список событий:</b>\n\nСписок событий пуст."
+        await callback.message.edit_text(text, parse_mode="HTML", reply_markup=get_events_menu())
+        return
+    
+    total_pages = (len(evs) + EVENTS_PER_PAGE - 1) // EVENTS_PER_PAGE
+    
+    start_idx = page * EVENTS_PER_PAGE
+    end_idx = min(start_idx + EVENTS_PER_PAGE, len(evs))
+    page_events = evs[start_idx:end_idx]
+    
+    text = "<b>📅 Список событий:</b>\n\n"
+    for i, event in enumerate(page_events, start=start_idx + 1):
+        rec = event.get('recurrence', 'нет') or 'нет'
+        days_left = get_days_until(event['date_str']) or '—'
+        text += f"<b>{i}.</b> {event['description']}\n"
+        text += f"   🗓 Дата: {event['date_str']} | 🔁 {rec}\n"
+        text += f"   ⏳ Дней осталось: {days_left}\n\n"
+    
+    await callback.message.edit_text(
+        text, 
+        parse_mode="HTML", 
+        reply_markup=get_event_list_with_actions(evs, page, total_pages)
+    )
+
 @router.callback_query(F.data == "extra_events")
 async def show_events(callback: types.CallbackQuery):
-    evs = await get_all_events()
-    if not evs:
-        text = "Список событий пуст."
-        await callback.message.edit_text(text, parse_mode="HTML", reply_markup=get_events_menu())
-    else:
-        text = "<b>Управление событиями:</b>\nВыберите событие для редактирования или удаления:"
-        await callback.message.edit_text(text, parse_mode="HTML", reply_markup=get_event_list_menu(evs))
+    await show_events_page(callback, page=0)
     await callback.answer()
 
 @router.callback_query(F.data == "extra_events_list")
 async def show_events_list(callback: types.CallbackQuery):
-    evs = await get_all_events()
-    if not evs:
-        text = "Список событий пуст."
-        await callback.message.edit_text(text, parse_mode="HTML", reply_markup=get_events_menu())
-    else:
-        text = "<b>Управление событиями:</b>\nВыберите событие для редактирования или удаления:"
-        await callback.message.edit_text(text, parse_mode="HTML", reply_markup=get_event_list_menu(evs))
+    await show_events_page(callback, page=0)
+    await callback.answer()
+
+@router.callback_query(F.data.startswith("ev_page_"))
+async def paginate_events(callback: types.CallbackQuery):
+    page = int(callback.data.replace("ev_page_", ""))
+    await show_events_page(callback, page=page)
     await callback.answer()
 
 @router.callback_query(F.data.startswith("ev_manage_"))
