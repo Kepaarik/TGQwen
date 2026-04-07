@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, time
 from config import MOSCOW_TZ
 from database.connection import events_col, settings_col
 from bson import ObjectId
@@ -7,13 +7,14 @@ async def get_all_events():
     cursor = events_col.find().sort("created_at", -1)
     return await cursor.to_list(length=100)
 
-async def add_event(user_id: int, user_name: str, date_str: str, description: str, recurrence: str = None):
+async def add_event(user_id: int, user_name: str, date_str: str, description: str, recurrence: str = None, greeting_time: str = "09:00"):
     event_doc = {
         "user_id": str(user_id),
         "user_name": user_name,
         "date_str": date_str,
         "description": description,
         "recurrence": recurrence,
+        "greeting_time": greeting_time,  # Время отправки поздравления в формате ЧЧ:ММ
         "created_at": datetime.now(MOSCOW_TZ)
     }
     await events_col.insert_one(event_doc)
@@ -46,6 +47,20 @@ async def update_event(event_id: str, updates: dict):
         await events_col.update_one({"_id": ObjectId(event_id)}, {"$set": updates})
     except Exception:
         await events_col.update_one({"_id": event_id}, {"$set": updates})
+
+async def get_greeting_time(user_id: str, event_id: str) -> str:
+    """Получить время отправки поздравления для события"""
+    event = await get_event_by_id(event_id)
+    if event:
+        return event.get("greeting_time", "09:00")
+    return "09:00"
+
+async def set_greeting_time(event_id: str, greeting_time: str):
+    """Установить время отправки поздравления для события"""
+    try:
+        await events_col.update_one({"_id": ObjectId(event_id)}, {"$set": {"greeting_time": greeting_time}})
+    except Exception:
+        await events_col.update_one({"_id": event_id}, {"$set": {"greeting_time": greeting_time}})
 
 async def get_greeting_status(user_id: str, event_id: str, date_str: str):
     """Проверить, было ли уже поздравление с этим событием сегодня"""

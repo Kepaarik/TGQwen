@@ -2,7 +2,7 @@ from aiogram import Router, types, F
 from aiogram.fsm.context import FSMContext
 from keyboards.inline_kb import get_events_menu, get_extra_menu, get_events_list_menu, get_events_select_menu, get_event_edit_menu, get_recurrence_menu, get_cancel_keyboard
 from handlers.states import EventState, EditEventState
-from database.events_db import get_all_events, add_event, get_event_by_id, update_event, delete_event
+from database.events_db import get_all_events, add_event, get_event_by_id, update_event, delete_event, set_greeting_time
 from services.date_utils import get_days_until, format_date_fancy
 import asyncio
 
@@ -116,12 +116,14 @@ async def show_edit_options(callback: types.CallbackQuery):
     current_date = event.get('date_str', 'не указана')
     current_desc = event.get('description', 'не указано')
     current_rec = event.get('recurrence', None) or 'нет'
+    current_time = event.get('greeting_time', '09:00')
     rec_text = {'yearly': 'Ежегодно', 'monthly': 'Ежемесячно', 'weekly': 'Еженедельно', 'нет': 'Без повторения', None: 'Без повторения'}.get(current_rec, 'Без повторения')
     
     text = f"<b>✏️ Редактирование события:</b>\n\n"
     text += f"<b>Описание:</b> {current_desc}\n"
     text += f"<b>Дата:</b> {current_date}\n"
-    text += f"<b>Периодичность:</b> {rec_text}\n\n"
+    text += f"<b>Периодичность:</b> {rec_text}\n"
+    text += f"<b>Время поздравления:</b> {current_time}\n\n"
     text += "Выберите параметр для изменения:"
     
     try:
@@ -239,6 +241,66 @@ async def start_edit_rec(callback: types.CallbackQuery):
         await callback.message.answer(text, parse_mode="HTML", reply_markup=get_recurrence_menu(event_id, current_rec))
     await callback.answer()
 
+@router.callback_query(F.data.startswith("ev_edit_time_"))
+async def start_edit_greeting_time(callback: types.CallbackQuery):
+    """Начать редактирование времени отправки поздравления"""
+    event_id = callback.data.replace("ev_edit_time_", "")
+    event = await get_event_by_id(event_id)
+    if not event:
+        await callback.answer("Событие не найдено.", show_alert=True)
+        return
+    
+    current_time = event.get('greeting_time', '09:00')
+    await callback.message.edit_text(
+        f"<b>Редактирование времени поздравления:</b>\n\n"
+        f"Текущее время: {current_time}\n\n"
+        f"Введите новое время в формате ЧЧ:ММ (например, 08:30 или 14:00):",
+        parse_mode="HTML",
+        reply_markup=get_cancel_keyboard(f"ev_manage_{event_id}")
+    )
+    await state.update_data(event_id=event_id)
+    await state.set_state(EditEventState.wait_new_greeting_time)
+    await callback.answer()
+
+@router.message(EditEventState.wait_new_greeting_time, F.text)
+async def process_new_greeting_time(message: types.Message, state: FSMContext):
+    """Обработка нового времени отправки поздравления"""
+    time_str = message.text.strip()
+    
+    # Проверяем формат ЧЧ:ММ
+    if ":" not in time_str:
+        await message.answer("Ошибка: неправильный формат. Введите ЧЧ:ММ:")
+        return
+    
+    try:
+        parts = time_str.split(':')
+        hour = int(parts[0])
+        minute = int(parts[1])
+        if hour < 0 or hour > 23 or minute < 0 or minute > 59:
+            raise ValueError("Неверное время")
+    except:
+        await message.answer("Ошибка: неверное время. Часы должны быть 0-23, минуты 0-59:")
+        return
+    
+    data = await state.get_data()
+    event_id = data['event_id']
+    
+    # Удаляем сообщение пользователя
+    try:
+        await message.delete()
+    except Exception:
+        pass
+    
+    await set_greeting_time(event_id, time_str)
+    
+    # Возвращаемся к меню редактирования события
+    text = f"<b>Время обновлено!</b>\n\nНовое время: {time_str}"
+    try:
+        await message.answer(text, parse_mode="HTML", reply_markup=get_event_edit_menu(event_id))
+    except Exception:
+        await message.answer(text, parse_mode="HTML", reply_markup=get_event_edit_menu(event_id))
+    await state.clear()
+
 @router.callback_query(F.data.startswith("ev_set_rec_"))
 async def set_recurrence(callback: types.CallbackQuery):
     # Формат: ev_set_rec_TYPE_EVENTID
@@ -334,7 +396,8 @@ async def process_event_desc(message: types.Message, state: FSMContext):
     date_str = data['date']
     desc = message.text.strip()
     
-    await add_event(message.from_user.id, message.from_user.first_name, date_str, desc, "yearly")
+    # Добавляем событие с временем поздравления по умолчанию 09:00
+    await add_event(message.from_user.id, message.from_user.first_name, date_str, desc, "yearly", "09:00")
     await message.answer("Событие успешно добавлено!", reply_markup=get_events_menu())
     await state.clear()
 

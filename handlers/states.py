@@ -12,3 +12,4 @@ class EditEventState(StatesGroup):
     wait_new_date = State()
     wait_new_desc = State()
     wait_new_recurrence = State()
+    wait_new_greeting_time = State()
