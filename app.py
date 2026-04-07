@@ -2,6 +2,7 @@ import asyncio
 import logging
 import os
 import random
+import signal
 from aiogram import Bot, Dispatcher
 from aiogram.fsm.storage.memory import MemoryStorage
 from aiogram.client.default import DefaultBotProperties
@@ -18,6 +19,14 @@ logger = logging.getLogger(__name__)
 
 # URL вашего сервиса на Render (задаётся через переменную окружения RENDER_URL)
 RENDER_URL = os.getenv("RENDER_URL", "")
+
+# Флаг для остановки фоновых задач
+shutdown_flag = False
+
+def handle_signal(signum, frame):
+    global shutdown_flag
+    logger.info(f"Получен сигнал {signum}, завершаем работу...")
+    shutdown_flag = True
 
 async def handle_request(request):
     return web.Response(text="Bot is running")
@@ -37,9 +46,11 @@ async def keep_alive():
         logger.warning("RENDER_URL не задан — keep-alive отключён.")
         return
     logger.info(f"Keep-alive запущен, пингуем {RENDER_URL} каждые 1-5 сек (случайно).")
-    while True:
+    while not shutdown_flag:
         delay = random.uniform(1, 5)
         await asyncio.sleep(delay)
+        if shutdown_flag:
+            break
         try:
             async with aiohttp.ClientSession() as session:
                 async with session.get(RENDER_URL, timeout=aiohttp.ClientTimeout(total=10)) as resp:
@@ -58,15 +69,34 @@ async def main():
     dp.include_router(events_handler.router)
 
     # Background tasks
-    asyncio.create_task(start_fake_server())
-    asyncio.create_task(keep_alive())
-    asyncio.create_task(refresh_rates_loop())
+    server_task = asyncio.create_task(start_fake_server())
+    keepalive_task = asyncio.create_task(keep_alive())
+    rates_task = asyncio.create_task(refresh_rates_loop())
     
     logger.info("Starting bot polling...")
-    await dp.start_polling(bot)
+    
+    try:
+        await dp.start_polling(bot)
+    finally:
+        global shutdown_flag
+        shutdown_flag = True
+        # Отменяем фоновые задачи
+        for task in [server_task, keepalive_task, rates_task]:
+            if not task.done():
+                task.cancel()
+                try:
+                    await task
+                except asyncio.CancelledError:
+                    pass
+        await bot.session.close()
+        logger.info("Бот остановлен, ресурсы освобождены.")
 
 if __name__ == "__main__":
+    # Регистрируем обработчики сигналов
+    signal.signal(signal.SIGTERM, handle_signal)
+    signal.signal(signal.SIGINT, handle_signal)
+    
     try:
         asyncio.run(main())
     except (KeyboardInterrupt, SystemExit):
-        logger.info("Bot stopped.")
+        logger.info("Бот остановлен пользователем.")
