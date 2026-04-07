@@ -13,6 +13,7 @@ import aiohttp
 from config import BOT_TOKEN, PORT
 from handlers import common, transactions, stats, events_handler
 from services.exchange_rates import refresh_rates_loop
+from services.event_checker import check_events_loop
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
@@ -72,6 +73,7 @@ async def main():
     server_task = asyncio.create_task(start_fake_server())
     keepalive_task = asyncio.create_task(keep_alive())
     rates_task = asyncio.create_task(refresh_rates_loop())
+    events_check_task = asyncio.create_task(check_events_loop(bot))
     
     logger.info("Starting bot polling...")
     
@@ -81,7 +83,7 @@ async def main():
         global shutdown_flag
         shutdown_flag = True
         # Отменяем фоновые задачи
-        for task in [server_task, keepalive_task, rates_task]:
+        for task in [server_task, keepalive_task, rates_task, events_check_task]:
             if not task.done():
                 task.cancel()
                 try:

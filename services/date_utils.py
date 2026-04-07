@@ -32,20 +32,24 @@ def get_days_until(date_text, recurrence='yearly'):
             # Для ежемесячных - считаем до того же числа в следующем месяце
             if today.day < day:
                 target_date = today.replace(day=day)
-            else:
+            elif today.day > day:
                 # Если число уже прошло в этом месяце, берем следующий месяц
                 if today.month == 12:
                     target_date = today.replace(year=today.year + 1, month=1, day=day)
                 else:
                     target_date = today.replace(month=today.month + 1, day=day)
+            else:
+                # Сегодня то же число - событие сегодня!
+                return "сегодня!"
         elif recurrence == 'weekly':
             # Для еженедельных - считаем до следующего такого же дня недели
             target_weekday = datetime(today.year, month, day).weekday()
             days_ahead = target_weekday - today.weekday()
             if days_ahead < 0:
                 days_ahead += 7
+            # Если сегодня тот же день недели - событие сегодня!
             if days_ahead == 0:
-                days_ahead = 7  # Если сегодня тот же день, считаем до следующей недели
+                return "сегодня!"
             from datetime import timedelta
             target_date = today + timedelta(days=days_ahead)
         else:

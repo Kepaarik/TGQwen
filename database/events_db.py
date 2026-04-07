@@ -46,3 +46,34 @@ async def update_event(event_id: str, updates: dict):
         await events_col.update_one({"_id": ObjectId(event_id)}, {"$set": updates})
     except Exception:
         await events_col.update_one({"_id": event_id}, {"$set": updates})
+
+async def get_greeting_status(user_id: str, event_id: str, date_str: str):
+    """Проверить, было ли уже поздравление с этим событием сегодня"""
+    record = await settings_col.find_one({
+        "key": "greeting_status",
+        "user_id": str(user_id),
+        "event_id": event_id,
+        "date_str": date_str
+    })
+    return record is not None
+
+async def set_greeting_status(user_id: str, event_id: str, date_str: str):
+    """Отметить, что событие было поздравлено сегодня"""
+    await settings_col.update_one(
+        {
+            "key": "greeting_status",
+            "user_id": str(user_id),
+            "event_id": event_id,
+            "date_str": date_str
+        },
+        {"$set": {"greeted_at": datetime.now(MOSCOW_TZ)}},
+        upsert=True
+    )
+
+async def clear_old_greeting_statuses(user_id: str, current_date_str: str):
+    """Очистить старые записи о поздравлениях (оставить только за текущую дату)"""
+    await settings_col.delete_many({
+        "key": "greeting_status",
+        "user_id": str(user_id),
+        "date_str": {"$ne": current_date_str}
+    })
