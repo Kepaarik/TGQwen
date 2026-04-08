@@ -64,6 +64,30 @@ async def cmd_admin(message: types.Message):
 
 # ==================== НАСТРОЙКА ВРЕМЕНИ СОБЫТИЙ ====================
 
+@router.callback_query(F.data == "admin")
+async def admin_menu_back(callback: types.CallbackQuery):
+    """Возврат в главное меню админ панели"""
+    if not await check_admin_access(callback):
+        await callback.answer()
+        return
+    
+    builder = InlineKeyboardBuilder()
+    builder.row(InlineKeyboardButton(text="⏰ Настройка времени событий", callback_data="admin_event_time"))
+    builder.row(InlineKeyboardButton(text="💬 Управление чатами для рассылок", callback_data="admin_broadcast_chats"))
+    builder.row(InlineKeyboardButton(text="📋 Привязка ID групп к именам", callback_data="admin_group_bindings"))
+    builder.row(InlineKeyboardButton(text="📨 Отправить сообщение", callback_data="admin_send_message"))
+    builder.row(InlineKeyboardButton(text="✕ Закрыть", callback_data="menu_close"))
+    
+    text = "<b>🛡️ Админ панель</b>\n\nВыберите действие:"
+    
+    try:
+        await callback.message.edit_text(text, reply_markup=builder.as_markup(), parse_mode="HTML")
+    except Exception:
+        await callback.message.answer(text, reply_markup=builder.as_markup(), parse_mode="HTML")
+    
+    await callback.answer()
+
+
 @router.callback_query(F.data == "admin_event_time")
 async def admin_event_time_menu(callback: types.CallbackQuery):
     """Меню настройки времени событий"""
@@ -90,11 +114,7 @@ async def admin_event_time_menu(callback: types.CallbackQuery):
     
     builder.row(InlineKeyboardButton(text="← Назад", callback_data="admin"))
     
-    try:
-        await callback.message.edit_text(text, reply_markup=builder.as_markup(), parse_mode="HTML")
-    except Exception:
-        await callback.message.answer(text, reply_markup=builder.as_markup(), parse_mode="HTML")
-    
+    await callback.message.edit_text(text, reply_markup=builder.as_markup(), parse_mode="HTML")
     await callback.answer()
 
 
@@ -196,11 +216,7 @@ async def admin_broadcast_chats_menu(callback: types.CallbackQuery):
     builder.row(InlineKeyboardButton(text="🔄 Обновить список", callback_data="admin_broadcast_chats"))
     builder.row(InlineKeyboardButton(text="← Назад", callback_data="admin"))
     
-    try:
-        await callback.message.edit_text(text, reply_markup=builder.as_markup(), parse_mode="HTML")
-    except Exception:
-        await callback.message.answer(text, reply_markup=builder.as_markup(), parse_mode="HTML")
-    
+    await callback.message.edit_text(text, reply_markup=builder.as_markup(), parse_mode="HTML")
     await callback.answer()
 
 
@@ -237,11 +253,7 @@ async def admin_group_bindings_menu(callback: types.CallbackQuery):
     builder.row(InlineKeyboardButton(text="🔄 Обновить список", callback_data="admin_group_bindings"))
     builder.row(InlineKeyboardButton(text="← Назад", callback_data="admin"))
     
-    try:
-        await callback.message.edit_text(text, reply_markup=builder.as_markup(), parse_mode="HTML")
-    except Exception:
-        await callback.message.answer(text, reply_markup=builder.as_markup(), parse_mode="HTML")
-    
+    await callback.message.edit_text(text, reply_markup=builder.as_markup(), parse_mode="HTML")
     await callback.answer()
 
 
@@ -260,11 +272,7 @@ async def admin_start_add_binding(callback: types.CallbackQuery, state: FSMConte
         "ID можно узнать, переслав сообщение из группы боту."
     )
     
-    try:
-        await callback.message.edit_text(text, parse_mode="HTML", reply_markup=get_cancel_keyboard("admin_group_bindings"))
-    except Exception:
-        await callback.message.answer(text, parse_mode="HTML", reply_markup=get_cancel_keyboard("admin_group_bindings"))
-    
+    await callback.message.edit_text(text, parse_mode="HTML", reply_markup=get_cancel_keyboard("admin_group_bindings"))
     await callback.answer()
 
 
@@ -348,11 +356,7 @@ async def admin_send_message_menu(callback: types.CallbackQuery):
         "Выберите получателя сообщения:"
     )
     
-    try:
-        await callback.message.edit_text(text, reply_markup=builder.as_markup(), parse_mode="HTML")
-    except Exception:
-        await callback.message.answer(text, reply_markup=builder.as_markup(), parse_mode="HTML")
-    
+    await callback.message.edit_text(text, reply_markup=builder.as_markup(), parse_mode="HTML")
     await callback.answer()
 
 
@@ -387,11 +391,7 @@ async def admin_send_to_user_select(callback: types.CallbackQuery):
     
     builder.row(InlineKeyboardButton(text="← Назад", callback_data="admin_send_message"))
     
-    try:
-        await callback.message.edit_text(text, reply_markup=builder.as_markup(), parse_mode="HTML")
-    except Exception:
-        await callback.message.answer(text, reply_markup=builder.as_markup(), parse_mode="HTML")
-    
+    await callback.message.edit_text(text, reply_markup=builder.as_markup(), parse_mode="HTML")
     await callback.answer()
 
 
@@ -412,11 +412,7 @@ async def admin_send_user_prep(callback: types.CallbackQuery, state: FSMContext)
         f"Введите текст сообщения:"
     )
     
-    try:
-        await callback.message.edit_text(text, parse_mode="HTML", reply_markup=get_cancel_keyboard("admin_send_message"))
-    except Exception:
-        await callback.message.answer(text, parse_mode="HTML", reply_markup=get_cancel_keyboard("admin_send_message"))
-    
+    await callback.message.edit_text(text, parse_mode="HTML", reply_markup=get_cancel_keyboard("admin_send_message"))
     await callback.answer()
 
 
@@ -446,11 +442,7 @@ async def admin_send_to_group_select(callback: types.CallbackQuery):
     
     builder.row(InlineKeyboardButton(text="← Назад", callback_data="admin_send_message"))
     
-    try:
-        await callback.message.edit_text(text, reply_markup=builder.as_markup(), parse_mode="HTML")
-    except Exception:
-        await callback.message.answer(text, reply_markup=builder.as_markup(), parse_mode="HTML")
-    
+    await callback.message.edit_text(text, reply_markup=builder.as_markup(), parse_mode="HTML")
     await callback.answer()
 
 
@@ -471,11 +463,7 @@ async def admin_send_group_prep(callback: types.CallbackQuery, state: FSMContext
         f"Введите текст сообщения:"
     )
     
-    try:
-        await callback.message.edit_text(text, parse_mode="HTML", reply_markup=get_cancel_keyboard("admin_send_message"))
-    except Exception:
-        await callback.message.answer(text, parse_mode="HTML", reply_markup=get_cancel_keyboard("admin_send_message"))
-    
+    await callback.message.edit_text(text, parse_mode="HTML", reply_markup=get_cancel_keyboard("admin_send_message"))
     await callback.answer()
 
 
@@ -495,11 +483,7 @@ async def admin_send_to_all_prep(callback: types.CallbackQuery, state: FSMContex
         f"<i>Сообщение будет отправлено всем пользователям, которые взаимодействовали с ботом.</i>"
     )
     
-    try:
-        await callback.message.edit_text(text, parse_mode="HTML", reply_markup=get_cancel_keyboard("admin_send_message"))
-    except Exception:
-        await callback.message.answer(text, parse_mode="HTML", reply_markup=get_cancel_keyboard("admin_send_message"))
-    
+    await callback.message.edit_text(text, parse_mode="HTML", reply_markup=get_cancel_keyboard("admin_send_message"))
     await callback.answer()
 
 
