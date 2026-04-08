@@ -41,6 +41,8 @@ class AdminStates(StatesGroup):
     wait_message_text = State()
     wait_group_binding_name = State()
     wait_group_binding_id = State()
+    wait_user_id_for_broadcast = State()
+    wait_user_name_for_broadcast = State()
 
 
 @router.callback_query(F.data == "admin")
@@ -54,6 +56,7 @@ async def admin_back_menu(callback: types.CallbackQuery):
     builder.row(InlineKeyboardButton(text="⏰ Настройка времени событий", callback_data="admin_event_time"))
     builder.row(InlineKeyboardButton(text="📅 Расписание проверок", callback_data="admin_schedule_info"))
     builder.row(InlineKeyboardButton(text="💬 Управление чатами для рассылок", callback_data="admin_broadcast_chats"))
+    builder.row(InlineKeyboardButton(text="👤 Добавить пользователя для рассылки", callback_data="admin_add_broadcast_user"))
     builder.row(InlineKeyboardButton(text="📋 Привязка ID групп к именам", callback_data="admin_group_bindings"))
     builder.row(InlineKeyboardButton(text="📨 Отправить сообщение", callback_data="admin_send_message"))
     builder.row(InlineKeyboardButton(text="✕ Закрыть", callback_data="menu_close"))
@@ -83,6 +86,7 @@ async def cmd_admin(message: types.Message):
     builder.row(InlineKeyboardButton(text="⏰ Настройка времени событий", callback_data="admin_event_time"))
     builder.row(InlineKeyboardButton(text="📅 Расписание проверок", callback_data="admin_schedule_info"))
     builder.row(InlineKeyboardButton(text="💬 Управление чатами для рассылок", callback_data="admin_broadcast_chats"))
+    builder.row(InlineKeyboardButton(text="👤 Добавить пользователя для рассылки", callback_data="admin_add_broadcast_user"))
     builder.row(InlineKeyboardButton(text="📋 Привязка ID групп к именам", callback_data="admin_group_bindings"))
     builder.row(InlineKeyboardButton(text="📨 Отправить сообщение", callback_data="admin_send_message"))
     builder.row(InlineKeyboardButton(text="✕ Закрыть", callback_data="menu_close"))
@@ -293,6 +297,90 @@ async def admin_broadcast_chats_menu(callback: types.CallbackQuery):
         await callback.message.answer(text, reply_markup=builder.as_markup(), parse_mode="HTML")
 
     await callback.answer()
+
+
+# ==================== ДОБАВЛЕНИЕ ПОЛЬЗОВАТЕЛЯ ДЛЯ РАССЫЛКИ ====================
+
+@router.callback_query(F.data == "admin_add_broadcast_user")
+async def admin_add_broadcast_user_menu(callback: types.CallbackQuery, state: FSMContext):
+    """Меню добавления пользователя для рассылки"""
+    if not await check_admin_access(callback):
+        await callback.answer()
+        return
+
+    await state.set_state(AdminStates.wait_user_id_for_broadcast)
+
+    text = (
+        "<b>👤 Добавить пользователя для рассылки</b>\n\n"
+        "Введите ID пользователя (например, 123456789):\n\n"
+        "ID можно узнать через бота @userinfobot или переслав сообщение от пользователя."
+    )
+
+    try:
+        await callback.message.edit_text(text, parse_mode="HTML", reply_markup=get_cancel_keyboard("admin"))
+    except TelegramBadRequest as e:
+        if "message is not modified" in str(e):
+            pass
+        else:
+            raise
+    await callback.answer()
+
+
+@router.message(AdminStates.wait_user_id_for_broadcast, F.text)
+async def process_user_id_for_broadcast(message: types.Message, state: FSMContext):
+    """Обработка ID пользователя для добавления в рассылку"""
+    user_id = message.text.strip()
+
+    # Проверяем, что это похоже на ID
+    if not user_id.lstrip('-').isdigit():
+        await message.answer("Ошибка: ID должен быть числом. Введите корректный ID:")
+        return
+
+    await state.update_data(broadcast_user_id=user_id)
+    await state.set_state(AdminStates.wait_user_name_for_broadcast)
+
+    await message.answer(
+        f"ID сохранен: <code>{user_id}</code>\n\n"
+        f"Теперь введите имя пользователя для отображения:",
+        parse_mode="HTML",
+        reply_markup=get_cancel_keyboard("admin")
+    )
+    await state.update_data(old_message_id=message.message_id)
+
+
+@router.message(AdminStates.wait_user_name_for_broadcast, F.text)
+async def process_user_name_for_broadcast(message: types.Message, state: FSMContext):
+    """Обработка имени пользователя для добавления в рассылку"""
+    user_name = message.text.strip()
+    data = await state.get_data()
+    user_id = data.get('broadcast_user_id')
+
+    if not user_id:
+        await message.answer("Ошибка: ID пользователя не найден. Начните сначала.")
+        await state.clear()
+        return
+
+    # Сохраняем пользователя в БД
+    try:
+        from database.events_db import save_user_chat
+        await save_user_chat(
+            user_id=int(user_id),
+            chat_id=user_id,
+            chat_type="private",
+            title=user_name,
+            username=None
+        )
+
+        text = f"<b>✅ Пользователь добавлен для рассылки!</b>\n\n"
+        text += f"Имя: {user_name}\n"
+        text += f"ID: <code>{user_id}</code>"
+
+        await message.answer(text, parse_mode="HTML", reply_markup=get_cancel_keyboard("admin"))
+    except Exception as e:
+        logger.error(f"Ошибка при сохранении пользователя для рассылки: {e}")
+        await message.answer(f"Ошибка при сохранении: {e}")
+
+    await state.clear()
 
 
 # ==================== ПРИВЯЗКА ID ГРУПП К ИМЕНАМ ====================
