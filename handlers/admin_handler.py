@@ -77,7 +77,10 @@ async def admin_menu_back(callback: types.CallbackQuery):
     builder.row(InlineKeyboardButton(text="💬 Управление чатами для рассылок", callback_data="admin_broadcast_chats"))
     builder.row(InlineKeyboardButton(text="📋 Привязка ID групп к именам", callback_data="admin_group_bindings"))
     builder.row(InlineKeyboardButton(text="📨 Отправить сообщение", callback_data="admin_send_message"))
-    builder.row(InlineKeyboardButton(text="✕ Закрыть", callback_data="menu_close"))
+    builder.row(
+        InlineKeyboardButton(text="🔄 Обновить", callback_data="admin_refresh"),
+        InlineKeyboardButton(text="✕ Закрыть", callback_data="menu_close")
+    )
     
     text = "<b>🛡️ Админ панель</b>\n\nВыберите действие:"
     
@@ -92,6 +95,38 @@ async def admin_menu_back(callback: types.CallbackQuery):
         await callback.message.answer(text, reply_markup=builder.as_markup(), parse_mode="HTML")
     
     await callback.answer()
+
+
+@router.callback_query(F.data == "admin_refresh")
+async def admin_refresh_menu(callback: types.CallbackQuery):
+    """Обновление главного меню админ панели"""
+    if not await check_admin_access(callback):
+        await callback.answer()
+        return
+    
+    builder = InlineKeyboardBuilder()
+    builder.row(InlineKeyboardButton(text="⏰ Настройка времени событий", callback_data="admin_event_time"))
+    builder.row(InlineKeyboardButton(text="💬 Управление чатами для рассылок", callback_data="admin_broadcast_chats"))
+    builder.row(InlineKeyboardButton(text="📋 Привязка ID групп к именам", callback_data="admin_group_bindings"))
+    builder.row(InlineKeyboardButton(text="📨 Отправить сообщение", callback_data="admin_send_message"))
+    builder.row(
+        InlineKeyboardButton(text="🔄 Обновить", callback_data="admin_refresh"),
+        InlineKeyboardButton(text="✕ Закрыть", callback_data="menu_close")
+    )
+    
+    text = "<b>🛡️ Админ панель</b>\n\nВыберите действие:"
+    
+    try:
+        await callback.message.edit_text(text, reply_markup=builder.as_markup(), parse_mode="HTML")
+    except TelegramBadRequest as e:
+        if "message is not modified" in str(e):
+            await callback.answer("Меню обновлено", show_alert=False)
+        else:
+            raise
+    except Exception:
+        await callback.message.answer(text, reply_markup=builder.as_markup(), parse_mode="HTML")
+    
+    await callback.answer("Меню обновлено", show_alert=False)
 
 
 @router.callback_query(F.data == "admin_event_time")
