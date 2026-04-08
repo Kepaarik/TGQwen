@@ -43,7 +43,7 @@ def get_currency_menu():
     for row in rows:
         builder.row(*row)
         
-    builder.row(InlineKeyboardButton(text="\u2190 Отмена", callback_data="menu_cancel_action"))
+    builder.row(InlineKeyboardButton(text="← Назад", callback_data="menu_cancel_action"))
     return builder.as_markup()
 
 def get_events_menu():
@@ -107,7 +107,7 @@ def get_event_edit_menu(event_id):
     builder.row(InlineKeyboardButton(text="✎ Изменить периодичность", callback_data=f"ev_edit_rec_{event_id}"))
     builder.row(InlineKeyboardButton(text="⏰ Изменить время поздравления", callback_data=f"ev_edit_time_{event_id}"))
     builder.row(InlineKeyboardButton(text="💬 Выбрать чаты", callback_data=f"ev_edit_chats_{event_id}"))
-    builder.row(InlineKeyboardButton(text="← Отмена", callback_data="extra_events"))
+    builder.row(InlineKeyboardButton(text="← Назад", callback_data="extra_events"))
     return builder.as_markup()
 
 def get_recurrence_menu(event_id, current_rec):
@@ -117,7 +117,7 @@ def get_recurrence_menu(event_id, current_rec):
     builder.row(InlineKeyboardButton(text=f"\U0001F5D3 Ежемесячно {('✓' if current_rec == 'monthly' else '')}", callback_data=f"ev_set_rec_monthly_{event_id}"))
     builder.row(InlineKeyboardButton(text=f"\U0001F4C6 Еженедельно {('✓' if current_rec == 'weekly' else '')}", callback_data=f"ev_set_rec_weekly_{event_id}"))
     builder.row(InlineKeyboardButton(text=f"\u221E Без повторения {('✓' if current_rec is None else '')}", callback_data=f"ev_set_rec_none_{event_id}"))
-    builder.row(InlineKeyboardButton(text="\u2190 Отмена", callback_data=f"ev_manage_{event_id}"))
+    builder.row(InlineKeyboardButton(text="← Назад", callback_data=f"ev_manage_{event_id}"))
     return builder.as_markup()
 
 def get_chats_select_menu(event_id: str, available_chats: list, selected_chats: list):
@@ -135,11 +135,11 @@ def get_chats_select_menu(event_id: str, available_chats: list, selected_chats: 
         ))
     
     builder.row(InlineKeyboardButton(text="💾 Сохранить", callback_data=f"ev_chats_save_{event_id}"))
-    builder.row(InlineKeyboardButton(text="\u2190 Отмена", callback_data=f"ev_manage_{event_id}"))
+    builder.row(InlineKeyboardButton(text="← Назад", callback_data=f"ev_manage_{event_id}"))
     return builder.as_markup()
 
 def get_cancel_keyboard(callback_data: str = "extra_events"):
     """Клавиатура с кнопкой отмены/назад"""
     builder = InlineKeyboardBuilder()
-    builder.row(InlineKeyboardButton(text="\u2190 Отмена", callback_data=callback_data))
+    builder.row(InlineKeyboardButton(text="← Назад", callback_data=callback_data))
     return builder.as_markup()
