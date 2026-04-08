@@ -9,6 +9,7 @@ from database.events_db import (
     get_event_chats, set_event_chats, get_user_chats, get_chat_display_info,
     chats_col, get_event_last_check_time
 )
+from services.event_checker import get_schedule_info
 from config import ADMIN_ID
 import logging
 import asyncio
@@ -51,6 +52,7 @@ async def admin_back_menu(callback: types.CallbackQuery):
 
     builder = InlineKeyboardBuilder()
     builder.row(InlineKeyboardButton(text="⏰ Настройка времени событий", callback_data="admin_event_time"))
+    builder.row(InlineKeyboardButton(text="📅 Расписание проверок", callback_data="admin_schedule_info"))
     builder.row(InlineKeyboardButton(text="💬 Управление чатами для рассылок", callback_data="admin_broadcast_chats"))
     builder.row(InlineKeyboardButton(text="📋 Привязка ID групп к именам", callback_data="admin_group_bindings"))
     builder.row(InlineKeyboardButton(text="📨 Отправить сообщение", callback_data="admin_send_message"))
@@ -79,6 +81,7 @@ async def cmd_admin(message: types.Message):
 
     builder = InlineKeyboardBuilder()
     builder.row(InlineKeyboardButton(text="⏰ Настройка времени событий", callback_data="admin_event_time"))
+    builder.row(InlineKeyboardButton(text="📅 Расписание проверок", callback_data="admin_schedule_info"))
     builder.row(InlineKeyboardButton(text="💬 Управление чатами для рассылок", callback_data="admin_broadcast_chats"))
     builder.row(InlineKeyboardButton(text="📋 Привязка ID групп к именам", callback_data="admin_group_bindings"))
     builder.row(InlineKeyboardButton(text="📨 Отправить сообщение", callback_data="admin_send_message"))
@@ -201,6 +204,55 @@ async def process_admin_new_time(message: types.Message, state: FSMContext):
     text = f"<b>✅ Время обновлено!</b>\n\nНовое время: {time_str}"
     await message.answer(text, parse_mode="HTML", reply_markup=get_cancel_keyboard("admin_event_time"))
     await state.clear()
+
+
+# ==================== РАСПИСАНИЕ ПРОВЕРОК ====================
+
+@router.callback_query(F.data == "admin_schedule_info")
+async def admin_schedule_info_menu(callback: types.CallbackQuery):
+    """Меню просмотра расписания проверок событий"""
+    if not await check_admin_access(callback):
+        await callback.answer()
+        return
+
+    schedule_info = await get_schedule_info()
+    
+    text = "<b>📅 Расписание проверок событий</b>\n\n"
+    
+    next_check = schedule_info.get('next_check')
+    if next_check:
+        text += f"<b>Следующая проверка:</b> {next_check.strftime('%d.%m %H:%M')}\n\n"
+    else:
+        text += "<b>Следующая проверка:</b> не запланировано\n\n"
+    
+    text += f"<b>Всего событий:</b> {schedule_info.get('total_events', 0)}\n\n"
+    
+    schedule_list = schedule_info.get('schedule', [])
+    if schedule_list:
+        text += "<b>Все запланированные проверки:</b>\n"
+        for i, item in enumerate(schedule_list[:20], 1):
+            desc = item.get('description', 'Событие')[:30]
+            sched_time = item.get('scheduled_time')
+            greeting_time = item.get('greeting_time', '09:00')
+            
+            if sched_time:
+                time_str = sched_time.strftime('%d.%m %H:%M')
+                text += f"{i}. {desc}\n"
+                text += f"   ⏰ Проверка: {time_str} | Время поздравления: {greeting_time}\n"
+    else:
+        text += "Нет запланированных событий."
+    
+    builder = InlineKeyboardBuilder()
+    builder.row(InlineKeyboardButton(text="← Назад", callback_data="admin"))
+    
+    try:
+        await callback.message.edit_text(text, reply_markup=builder.as_markup(), parse_mode="HTML")
+    except TelegramBadRequest as e:
+        if "message is not modified" in str(e):
+            await callback.answer()
+        else:
+            raise
+    await callback.answer()
 
 
 # ==================== УПРАВЛЕНИЕ ЧАТАМИ ДЛЯ РАССЫЛОК ====================

@@ -225,6 +225,42 @@ async def check_and_send_greetings(bot):
     logger.info(f"Проверка событий завершена. Найдено и обработано {len(today_events)} событий.")
     return len(today_events)
 
+async def get_schedule_info():
+    """
+    Получить информацию о расписании проверок событий.
+    Возвращает список всех запланированных проверок и время следующей.
+    """
+    global scheduled_events
+    
+    now = datetime.now(MOSCOW_TZ)
+    
+    # Перестраиваем расписание чтобы получить актуальные данные
+    await build_scheduled_events()
+    
+    schedule_list = []
+    next_check_time = None
+    
+    for scheduled in scheduled_events:
+        sched_time = scheduled['scheduled_time']
+        event_desc = scheduled['event'].get('description', 'Событие')
+        greeting_time = scheduled.get('greeting_time_str', '09:00')
+        
+        schedule_list.append({
+            'description': event_desc,
+            'scheduled_time': sched_time,
+            'greeting_time': greeting_time
+        })
+        
+        if sched_time > now:
+            if next_check_time is None or sched_time < next_check_time:
+                next_check_time = sched_time
+    
+    return {
+        'schedule': schedule_list,
+        'next_check': next_check_time,
+        'total_events': len(scheduled_events)
+    }
+
 async def check_events_loop(bot):
     """
     Фоновый цикл проверки событий.
