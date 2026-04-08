@@ -2,7 +2,7 @@ from aiogram import Router, types, F
 from aiogram.fsm.context import FSMContext
 from keyboards.inline_kb import get_events_menu, get_extra_menu, get_events_list_menu, get_events_select_menu, get_event_edit_menu, get_recurrence_menu, get_cancel_keyboard, get_chats_select_menu
 from handlers.states import EventState, EditEventState
-from database.events_db import get_all_events, add_event, get_event_by_id, update_event, delete_event, set_greeting_time, get_event_chats, set_event_chats
+from database.events_db import get_all_events, add_event, get_event_by_id, update_event, delete_event, set_greeting_time, get_event_chats, set_event_chats, get_user_chats, save_user_chat, get_chat_display_info
 from services.date_utils import get_days_until, format_date_fancy
 import asyncio
 import logging
@@ -414,13 +414,26 @@ async def start_edit_chats(callback: types.CallbackQuery, state: FSMContext):
     # Получаем текущие выбранные чаты
     selected_chats = await get_event_chats(event_id)
     
-    # Получаем список всех доступных чатов пользователя (из БД или кэша)
-    # Для простоты используем заглушку - в реальном проекте нужно получать из БД
-    available_chats = [
-        {"_id": "chat1", "name": "Личный чат"},
-        {"_id": "chat2", "name": "Семейный чат"},
-        {"_id": "chat3", "name": "Рабочий чат"}
-    ]
+    # Получаем список всех доступных чатов пользователя из БД
+    user_chats = await get_user_chats(callback.from_user.id)
+    
+    # Формируем список доступных чатов с отображаемыми именами
+    available_chats = []
+    for chat in user_chats:
+        chat_id = str(chat.get('chat_id', ''))
+        display_name = await get_chat_display_info(
+            chat_id=chat_id,
+            chat_type=chat.get('chat_type', 'private'),
+            title=chat.get('title'),
+            username=chat.get('username')
+        )
+        available_chats.append({"_id": chat_id, "name": display_name})
+    
+    # Если нет доступных чатов, добавим хотя бы личный чат с ботом
+    if not available_chats:
+        personal_chat_id = str(callback.from_user.id)
+        display_name = f"@{callback.from_user.username}" if callback.from_user.username else f"Личный чат ({personal_chat_id})"
+        available_chats.append({"_id": personal_chat_id, "name": display_name})
     
     text = "<b>💬 Выбор чатов для уведомлений:</b>\n\n"
     text += "Отметьте чаты, в которых будут отображаться уведомления об этом событии:\n\n"
@@ -464,12 +477,24 @@ async def toggle_chat_selection(callback: types.CallbackQuery, state: FSMContext
     
     await state.update_data(selected_chats=selected_chats)
     
-    # Обновляем клавиатуру
-    available_chats = [
-        {"_id": "chat1", "name": "Личный чат"},
-        {"_id": "chat2", "name": "Семейный чат"},
-        {"_id": "chat3", "name": "Рабочий чат"}
-    ]
+    # Получаем список доступных чатов для обновления клавиатуры
+    user_chats = await get_user_chats(callback.from_user.id)
+    available_chats = []
+    for chat in user_chats:
+        chat_id_iter = str(chat.get('chat_id', ''))
+        display_name = await get_chat_display_info(
+            chat_id=chat_id_iter,
+            chat_type=chat.get('chat_type', 'private'),
+            title=chat.get('title'),
+            username=chat.get('username')
+        )
+        available_chats.append({"_id": chat_id_iter, "name": display_name})
+    
+    # Если нет доступных чатов, добавим хотя бы личный чат с ботом
+    if not available_chats:
+        personal_chat_id = str(callback.from_user.id)
+        display_name = f"@{callback.from_user.username}" if callback.from_user.username else f"Личный чат ({personal_chat_id})"
+        available_chats.append({"_id": personal_chat_id, "name": display_name})
     
     text = "<b>💬 Выбор чатов для уведомлений:</b>\n\n"
     text += "Отметьте чаты, в которых будут отображаться уведомления об этом событии:\n\n"

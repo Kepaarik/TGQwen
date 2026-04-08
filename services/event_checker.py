@@ -2,7 +2,7 @@ import asyncio
 import logging
 from datetime import datetime, time
 from config import MOSCOW_TZ
-from database.events_db import get_all_events, get_greeting_status, set_greeting_status, clear_old_greeting_statuses, get_greeting_time, get_event_chats
+from database.events_db import get_all_events, get_greeting_status, set_greeting_status, clear_old_greeting_statuses, get_greeting_time, get_event_chats, get_user_chats, get_chat_display_info
 from services.date_utils import get_days_until
 
 logger = logging.getLogger(__name__)
@@ -101,8 +101,36 @@ async def check_and_send_greetings(bot):
             sent_count = 0
             for chat_id in chat_ids_to_send:
                 try:
+                    # Проверяем, является ли chat_id числом (ID чата) или строкой (имя пользователя)
+                    # Если это ID чата, используем его напрямую
+                    # Если это имя пользователя, нужно получить реальный ID из БД
+                    target_chat_id = None
+                    
+                    # Пытаемся преобразовать в int - если получится, это ID чата
+                    try:
+                        target_chat_id = int(chat_id)
+                    except (ValueError, TypeError):
+                        # Это не число, значит это может быть username или другой идентификатор
+                        # В этом случае ищем чат в БД по chat_id
+                        user_chats = await get_user_chats(int(user_id) if user_id.isdigit() else user_id)
+                        for chat in user_chats:
+                            if str(chat.get('chat_id', '')) == chat_id:
+                                target_chat_id = int(chat_id) if chat_id.isdigit() else chat_id
+                                break
+                        
+                        if target_chat_id is None:
+                            # Не нашли чат, пробуем использовать как есть
+                            target_chat_id = chat_id
+                    
+                    # Если target_chat_id всё ещё строка и не начинается с @, пытаемся преобразовать
+                    if isinstance(target_chat_id, str) and not target_chat_id.startswith('@'):
+                        try:
+                            target_chat_id = int(target_chat_id)
+                        except (ValueError, TypeError):
+                            pass
+                    
                     await bot.send_message(
-                        chat_id=int(chat_id),
+                        chat_id=target_chat_id,
                         text=greeting_text,
                         parse_mode="HTML"
                     )

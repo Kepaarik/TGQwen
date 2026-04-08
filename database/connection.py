@@ -6,3 +6,4 @@ db = client.marathon_db
 users_col = db.users
 events_col = db.events
 settings_col = db.settings
+chats_col = db.chats  # Коллекция для хранения информации о чатах

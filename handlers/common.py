@@ -2,10 +2,12 @@ import asyncio
 import logging
 from aiogram import Router, types, F
 from aiogram.filters import Command
+from aiogram.types import ChatMemberUpdated
 from keyboards.inline_kb import get_main_menu, get_extra_menu
 from aiogram.fsm.context import FSMContext
 from services.finance_calc import get_personal_wallet_text, format_balance_tree
 from services.event_checker import check_and_send_greetings
+from database.events_db import save_user_chat
 
 router = Router()
 logger = logging.getLogger(__name__)
@@ -28,6 +30,18 @@ async def ensure_clean_state(message_or_call, state: FSMContext):
 @router.message(Command("start"))
 async def cmd_start(message: types.Message, state: FSMContext):
     await ensure_clean_state(message, state)
+    
+    # Сохраняем информацию о личном чате с пользователем
+    try:
+        await save_user_chat(
+            user_id=message.from_user.id,
+            chat_id=str(message.from_user.id),
+            chat_type="private",
+            title=message.from_user.full_name,
+            username=message.from_user.username
+        )
+    except Exception as e:
+        logger.warning(f"Не удалось сохранить информацию о чате пользователя: {e}")
     
     # "Будим" бота - проверяем события сразу при старте
     if _bot_ref is not None:
@@ -80,3 +94,34 @@ async def close_menu(callback: types.CallbackQuery, state: FSMContext):
     except:
         pass
     await callback.answer()
+
+@router.my_chat_member()
+async def track_bot_added_to_group(event: ChatMemberUpdated):
+    """Отслеживает добавление бота в группу"""
+    if event.new_chat_member.status in ["member", "administrator", "creator"]:
+        # Бот был добавлен в группу
+        chat = event.chat
+        user = event.from_user
+        
+        try:
+            await save_user_chat(
+                user_id=user.id,
+                chat_id=str(chat.id),
+                chat_type=chat.type,
+                title=chat.title,
+                username=chat.username if hasattr(chat, 'username') else None
+            )
+            logger.info(f"Бот добавлен в группу: {chat.title} ({chat.id}) пользователем {user.full_name}")
+        except Exception as e:
+            logger.warning(f"Не удалось сохранить информацию о группе: {e}")
+    elif event.new_chat_member.status == "left":
+        # Бот был удален из группы
+        chat = event.chat
+        user = event.from_user
+        
+        try:
+            from database.events_db import remove_user_chat
+            await remove_user_chat(user.id, str(chat.id))
+            logger.info(f"Бот удален из группы: {chat.title} ({chat.id})")
+        except Exception as e:
+            logger.warning(f"Не удалось удалить информацию о группе: {e}")
