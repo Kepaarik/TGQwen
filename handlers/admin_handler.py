@@ -2,6 +2,7 @@ from aiogram import Router, types, F
 from aiogram.fsm.context import FSMContext
 from aiogram.filters import Command
 from aiogram.utils.keyboard import InlineKeyboardBuilder, InlineKeyboardButton
+from aiogram.exceptions import TelegramBadRequest
 from keyboards.inline_kb import get_cancel_keyboard
 from database.events_db import (
     get_all_events, get_event_by_id, update_event, set_greeting_time,
@@ -82,6 +83,11 @@ async def admin_menu_back(callback: types.CallbackQuery):
     
     try:
         await callback.message.edit_text(text, reply_markup=builder.as_markup(), parse_mode="HTML")
+    except TelegramBadRequest as e:
+        if "message is not modified" in str(e):
+            pass
+        else:
+            raise
     except Exception:
         await callback.message.answer(text, reply_markup=builder.as_markup(), parse_mode="HTML")
     
@@ -114,7 +120,13 @@ async def admin_event_time_menu(callback: types.CallbackQuery):
     
     builder.row(InlineKeyboardButton(text="← Назад", callback_data="admin"))
     
-    await callback.message.edit_text(text, reply_markup=builder.as_markup(), parse_mode="HTML")
+    try:
+        await callback.message.edit_text(text, reply_markup=builder.as_markup(), parse_mode="HTML")
+    except TelegramBadRequest as e:
+        if "message is not modified" in str(e):
+            await callback.answer()
+        else:
+            raise
     await callback.answer()
 
 
@@ -217,11 +229,13 @@ async def admin_broadcast_chats_menu(callback: types.CallbackQuery):
     
     try:
         await callback.message.edit_text(text, reply_markup=builder.as_markup(), parse_mode="HTML")
-    except Exception as e:
+    except TelegramBadRequest as e:
         if "message is not modified" in str(e):
             pass
         else:
-            await callback.message.answer(text, reply_markup=builder.as_markup(), parse_mode="HTML")
+            raise
+    except Exception:
+        await callback.message.answer(text, reply_markup=builder.as_markup(), parse_mode="HTML")
     
     await callback.answer()
 
@@ -260,11 +274,13 @@ async def admin_group_bindings_menu(callback: types.CallbackQuery):
     
     try:
         await callback.message.edit_text(text, reply_markup=builder.as_markup(), parse_mode="HTML")
-    except Exception as e:
+    except TelegramBadRequest as e:
         if "message is not modified" in str(e):
             pass
         else:
-            await callback.message.answer(text, reply_markup=builder.as_markup(), parse_mode="HTML")
+            raise
+    except Exception:
+        await callback.message.answer(text, reply_markup=builder.as_markup(), parse_mode="HTML")
     
     await callback.answer()
 
@@ -284,7 +300,13 @@ async def admin_start_add_binding(callback: types.CallbackQuery, state: FSMConte
         "ID можно узнать, переслав сообщение из группы боту."
     )
     
-    await callback.message.edit_text(text, parse_mode="HTML", reply_markup=get_cancel_keyboard("admin_group_bindings"))
+    try:
+        await callback.message.edit_text(text, parse_mode="HTML", reply_markup=get_cancel_keyboard("admin_group_bindings"))
+    except TelegramBadRequest as e:
+        if "message is not modified" in str(e):
+            pass
+        else:
+            raise
     await callback.answer()
 
 
@@ -368,7 +390,13 @@ async def admin_send_message_menu(callback: types.CallbackQuery):
         "Выберите получателя сообщения:"
     )
     
-    await callback.message.edit_text(text, reply_markup=builder.as_markup(), parse_mode="HTML")
+    try:
+        await callback.message.edit_text(text, reply_markup=builder.as_markup(), parse_mode="HTML")
+    except TelegramBadRequest as e:
+        if "message is not modified" in str(e):
+            pass
+        else:
+            raise
     await callback.answer()
 
 
@@ -403,7 +431,13 @@ async def admin_send_to_user_select(callback: types.CallbackQuery):
     
     builder.row(InlineKeyboardButton(text="← Назад", callback_data="admin_send_message"))
     
-    await callback.message.edit_text(text, reply_markup=builder.as_markup(), parse_mode="HTML")
+    try:
+        await callback.message.edit_text(text, reply_markup=builder.as_markup(), parse_mode="HTML")
+    except TelegramBadRequest as e:
+        if "message is not modified" in str(e):
+            pass
+        else:
+            raise
     await callback.answer()
 
 
@@ -424,7 +458,13 @@ async def admin_send_user_prep(callback: types.CallbackQuery, state: FSMContext)
         f"Введите текст сообщения:"
     )
     
-    await callback.message.edit_text(text, parse_mode="HTML", reply_markup=get_cancel_keyboard("admin_send_message"))
+    try:
+        await callback.message.edit_text(text, parse_mode="HTML", reply_markup=get_cancel_keyboard("admin_send_message"))
+    except TelegramBadRequest as e:
+        if "message is not modified" in str(e):
+            pass
+        else:
+            raise
     await callback.answer()
 
 
@@ -454,7 +494,13 @@ async def admin_send_to_group_select(callback: types.CallbackQuery):
     
     builder.row(InlineKeyboardButton(text="← Назад", callback_data="admin_send_message"))
     
-    await callback.message.edit_text(text, reply_markup=builder.as_markup(), parse_mode="HTML")
+    try:
+        await callback.message.edit_text(text, reply_markup=builder.as_markup(), parse_mode="HTML")
+    except TelegramBadRequest as e:
+        if "message is not modified" in str(e):
+            pass
+        else:
+            raise
     await callback.answer()
 
 
@@ -475,7 +521,13 @@ async def admin_send_group_prep(callback: types.CallbackQuery, state: FSMContext
         f"Введите текст сообщения:"
     )
     
-    await callback.message.edit_text(text, parse_mode="HTML", reply_markup=get_cancel_keyboard("admin_send_message"))
+    try:
+        await callback.message.edit_text(text, parse_mode="HTML", reply_markup=get_cancel_keyboard("admin_send_message"))
+    except TelegramBadRequest as e:
+        if "message is not modified" in str(e):
+            pass
+        else:
+            raise
     await callback.answer()
 
 
@@ -495,14 +547,20 @@ async def admin_send_to_all_prep(callback: types.CallbackQuery, state: FSMContex
         f"<i>Сообщение будет отправлено всем пользователям, которые взаимодействовали с ботом.</i>"
     )
     
-    await callback.message.edit_text(text, parse_mode="HTML", reply_markup=get_cancel_keyboard("admin_send_message"))
+    try:
+        await callback.message.edit_text(text, parse_mode="HTML", reply_markup=get_cancel_keyboard("admin_send_message"))
+    except TelegramBadRequest as e:
+        if "message is not modified" in str(e):
+            pass
+        else:
+            raise
     await callback.answer()
 
 
 @router.message(AdminStates.wait_message_text, F.text)
 async def process_admin_message_text(message: types.Message, state: FSMContext):
     """Отправка сообщения от имени бота"""
-    from common import get_bot_ref
+    from handlers.common import get_bot_ref
     
     data = await state.get_data()
     recipient_type = data.get('recipient_type')
