@@ -718,7 +718,7 @@ async def admin_send_to_all_prep(callback: types.CallbackQuery, state: FSMContex
 @router.message(AdminStates.wait_message_text, F.text)
 async def process_admin_message_text(message: types.Message, state: FSMContext):
     """Отправка сообщения от имени бота"""
-    from common import get_bot_ref
+    from .common import get_bot_ref
     
     data = await state.get_data()
     recipient_type = data.get('recipient_type')
