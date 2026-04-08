@@ -1,7 +1,7 @@
 from aiogram import Router, types, F
 from aiogram.fsm.context import FSMContext
 from aiogram.filters import Command
-from aiogram.utils.keyboard import InlineKeyboardBuilder
+from aiogram.utils.keyboard import InlineKeyboardBuilder, InlineKeyboardButton
 from keyboards.inline_kb import get_cancel_keyboard
 from database.events_db import (
     get_all_events, get_event_by_id, update_event, set_greeting_time,
