@@ -575,16 +575,41 @@ async def process_event_date(message: types.Message, state: FSMContext):
     if "." not in date_str:
         await message.answer("Ошибка: неправильный формат. Введите ДД.ММ:", reply_markup=get_cancel_keyboard("extra_events"))
         return
-        
+    
+    # Удаляем сообщение пользователя
+    try:
+        await message.delete()
+    except Exception:
+        pass
+    
     await state.update_data(date=date_str)
     await state.set_state(EventState.wait_desc)
-    await message.answer("Введите описание события:", reply_markup=get_cancel_keyboard("extra_events"))
+    
+    # Редактируем сообщение бота вместо отправки нового
+    text = f"<b>Дата принята:</b> {date_str}\n\nВведите описание события:"
+    try:
+        await message.bot.edit_message_text(
+            chat_id=message.chat.id,
+            message_id=message.message_id - 1,  # ID предыдущего сообщения бота
+            text=text,
+            parse_mode="HTML",
+            reply_markup=get_cancel_keyboard("extra_events")
+        )
+    except Exception:
+        # Если не удалось отредактировать, отправляем новое
+        await message.answer(text, parse_mode="HTML", reply_markup=get_cancel_keyboard("extra_events"))
 
 @router.message(EventState.wait_desc, F.text)
 async def process_event_desc(message: types.Message, state: FSMContext):
     data = await state.get_data()
     date_str = data['date']
     desc = message.text.strip()
+    
+    # Удаляем сообщение пользователя
+    try:
+        await message.delete()
+    except Exception:
+        pass
     
     # Добавляем событие с временем поздравления по умолчанию 09:00
     await add_event(message.from_user.id, message.from_user.first_name, date_str, desc, "yearly", "09:00")
@@ -596,7 +621,20 @@ async def process_event_desc(message: types.Message, state: FSMContext):
     except Exception as e:
         logger.warning(f"Не удалось обновить расписание событий: {e}")
     
-    await message.answer("Событие успешно добавлено!", reply_markup=get_events_menu())
+    # Редактируем сообщение бота вместо отправки нового
+    text = "<b>Событие успешно добавлено!</b>"
+    try:
+        await message.bot.edit_message_text(
+            chat_id=message.chat.id,
+            message_id=message.message_id - 1,  # ID предыдущего сообщения бота
+            text=text,
+            parse_mode="HTML",
+            reply_markup=get_events_menu()
+        )
+    except Exception:
+        # Если не удалось отредактировать, отправляем новое
+        await message.answer(text, parse_mode="HTML", reply_markup=get_events_menu())
+    
     await state.clear()
 
 from aiogram.filters import Command
