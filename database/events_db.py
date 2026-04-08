@@ -16,6 +16,7 @@ async def add_event(user_id: int, user_name: str, date_str: str, description: st
         "recurrence": recurrence,
         "greeting_time": greeting_time,  # Время отправки поздравления в формате ЧЧ:ММ
         "chats": chats or [],  # Список ID чатов для отображения уведомлений
+        "last_check_time": None,  # Время последней проверки события
         "created_at": datetime.now(MOSCOW_TZ)
     }
     await events_col.insert_one(event_doc)
@@ -62,6 +63,20 @@ async def set_greeting_time(event_id: str, greeting_time: str):
         await events_col.update_one({"_id": ObjectId(event_id)}, {"$set": {"greeting_time": greeting_time}})
     except Exception:
         await events_col.update_one({"_id": event_id}, {"$set": {"greeting_time": greeting_time}})
+
+async def set_event_last_check_time(event_id: str, check_time: str):
+    """Установить время последней проверки события"""
+    try:
+        await events_col.update_one({"_id": ObjectId(event_id)}, {"$set": {"last_check_time": check_time}})
+    except Exception:
+        await events_col.update_one({"_id": event_id}, {"$set": {"last_check_time": check_time}})
+
+async def get_event_last_check_time(event_id: str) -> str:
+    """Получить время последней проверки события"""
+    event = await get_event_by_id(event_id)
+    if event:
+        return event.get("last_check_time", "Не проверялось")
+    return "Не проверялось"
 
 async def get_greeting_status(user_id: str, event_id: str, date_str: str):
     """Проверить, было ли уже поздравление с этим событием сегодня"""
