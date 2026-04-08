@@ -106,6 +106,7 @@ def get_event_edit_menu(event_id):
     builder.row(InlineKeyboardButton(text="✎ Изменить описание", callback_data=f"ev_edit_desc_{event_id}"))
     builder.row(InlineKeyboardButton(text="✎ Изменить периодичность", callback_data=f"ev_edit_rec_{event_id}"))
     builder.row(InlineKeyboardButton(text="⏰ Изменить время поздравления", callback_data=f"ev_edit_time_{event_id}"))
+    builder.row(InlineKeyboardButton(text="💬 Выбрать чаты", callback_data=f"ev_edit_chats_{event_id}"))
     builder.row(InlineKeyboardButton(text="← Отмена", callback_data="extra_events"))
     return builder.as_markup()
 
@@ -116,6 +117,24 @@ def get_recurrence_menu(event_id, current_rec):
     builder.row(InlineKeyboardButton(text=f"\U0001F5D3 Ежемесячно {('✓' if current_rec == 'monthly' else '')}", callback_data=f"ev_set_rec_monthly_{event_id}"))
     builder.row(InlineKeyboardButton(text=f"\U0001F4C6 Еженедельно {('✓' if current_rec == 'weekly' else '')}", callback_data=f"ev_set_rec_weekly_{event_id}"))
     builder.row(InlineKeyboardButton(text=f"\u221E Без повторения {('✓' if current_rec is None else '')}", callback_data=f"ev_set_rec_none_{event_id}"))
+    builder.row(InlineKeyboardButton(text="\u2190 Отмена", callback_data=f"ev_manage_{event_id}"))
+    return builder.as_markup()
+
+def get_chats_select_menu(event_id: str, available_chats: list, selected_chats: list):
+    """Меню выбора чатов для события"""
+    builder = InlineKeyboardBuilder()
+    
+    for chat in available_chats:
+        chat_id = str(chat.get('_id', ''))
+        chat_name = chat.get('name', f'Чат {chat_id}')
+        is_selected = chat_id in selected_chats
+        checkbox = "✅" if is_selected else "⬜"
+        builder.row(InlineKeyboardButton(
+            text=f"{checkbox} {chat_name}",
+            callback_data=f"ev_chat_toggle_{event_id}_{chat_id}"
+        ))
+    
+    builder.row(InlineKeyboardButton(text="💾 Сохранить", callback_data=f"ev_chats_save_{event_id}"))
     builder.row(InlineKeyboardButton(text="\u2190 Отмена", callback_data=f"ev_manage_{event_id}"))
     return builder.as_markup()
 

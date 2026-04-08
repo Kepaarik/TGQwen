@@ -2,7 +2,7 @@ import asyncio
 import logging
 from datetime import datetime, time
 from config import MOSCOW_TZ
-from database.events_db import get_all_events, get_greeting_status, set_greeting_status, clear_old_greeting_statuses, get_greeting_time
+from database.events_db import get_all_events, get_greeting_status, set_greeting_status, clear_old_greeting_statuses, get_greeting_time, get_event_chats
 from services.date_utils import get_days_until
 
 logger = logging.getLogger(__name__)
@@ -85,15 +85,34 @@ async def check_and_send_greetings(bot):
                 greeting_text += f"({rec_text} событие)\n"
             greeting_text += f"\nДата: {date_str}"
             
-            await bot.send_message(
-                chat_id=int(user_id),
-                text=greeting_text,
-                parse_mode="HTML"
-            )
+            # Получаем список чатов для этого события
+            event_chats = await get_event_chats(event_id)
+            
+            # Определяем куда отправлять уведомления
+            chat_ids_to_send = []
+            if event_chats:
+                # Если есть выбранные чаты, отправляем в них
+                chat_ids_to_send = event_chats
+            else:
+                # Если чаты не выбраны, отправляем только пользователю
+                chat_ids_to_send = [user_id]
+            
+            # Отправляем уведомления во все выбранные чаты
+            sent_count = 0
+            for chat_id in chat_ids_to_send:
+                try:
+                    await bot.send_message(
+                        chat_id=int(chat_id),
+                        text=greeting_text,
+                        parse_mode="HTML"
+                    )
+                    sent_count += 1
+                except Exception as chat_error:
+                    logger.warning(f"Не удалось отправить уведомление в чат {chat_id}: {chat_error}")
             
             # Отмечаем что поздравление отправлено
             await set_greeting_status(user_id, event_id, current_date_str)
-            logger.info(f"Поздравление отправлено пользователю {user_id} для события {event_id}")
+            logger.info(f"Поздравление отправлено в {sent_count} чат(ов) для события {event_id}")
             
         except Exception as e:
             error_msg = str(e)

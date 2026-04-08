@@ -7,7 +7,7 @@ async def get_all_events():
     cursor = events_col.find().sort("created_at", -1)
     return await cursor.to_list(length=100)
 
-async def add_event(user_id: int, user_name: str, date_str: str, description: str, recurrence: str = None, greeting_time: str = "09:00"):
+async def add_event(user_id: int, user_name: str, date_str: str, description: str, recurrence: str = None, greeting_time: str = "09:00", chats: list = None):
     event_doc = {
         "user_id": str(user_id),
         "user_name": user_name,
@@ -15,6 +15,7 @@ async def add_event(user_id: int, user_name: str, date_str: str, description: st
         "description": description,
         "recurrence": recurrence,
         "greeting_time": greeting_time,  # Время отправки поздравления в формате ЧЧ:ММ
+        "chats": chats or [],  # Список ID чатов для отображения уведомлений
         "created_at": datetime.now(MOSCOW_TZ)
     }
     await events_col.insert_one(event_doc)
@@ -84,6 +85,34 @@ async def set_greeting_status(user_id: str, event_id: str, date_str: str):
         {"$set": {"greeted_at": datetime.now(MOSCOW_TZ)}},
         upsert=True
     )
+
+async def get_event_chats(event_id: str) -> list:
+    """Получить список чатов для события"""
+    event = await get_event_by_id(event_id)
+    if event:
+        return event.get("chats", [])
+    return []
+
+async def set_event_chats(event_id: str, chats: list):
+    """Установить список чатов для события"""
+    try:
+        await events_col.update_one({"_id": ObjectId(event_id)}, {"$set": {"chats": chats}})
+    except Exception:
+        await events_col.update_one({"_id": event_id}, {"$set": {"chats": chats}})
+
+async def add_event_chat(event_id: str, chat_id: str):
+    """Добавить чат к списку чатов события"""
+    try:
+        await events_col.update_one({"_id": ObjectId(event_id)}, {"$addToSet": {"chats": chat_id}})
+    except Exception:
+        await events_col.update_one({"_id": event_id}, {"$addToSet": {"chats": chat_id}})
+
+async def remove_event_chat(event_id: str, chat_id: str):
+    """Удалить чат из списка чатов события"""
+    try:
+        await events_col.update_one({"_id": ObjectId(event_id)}, {"$pull": {"chats": chat_id}})
+    except Exception:
+        await events_col.update_one({"_id": event_id}, {"$pull": {"chats": chat_id}})
 
 async def clear_old_greeting_statuses(user_id: str, current_date_str: str):
     """Очистить старые записи о поздравлениях (оставить только за текущую дату)"""
