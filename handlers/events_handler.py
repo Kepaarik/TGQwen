@@ -1,8 +1,8 @@
 from aiogram import Router, types, F
 from aiogram.fsm.context import FSMContext
-from keyboards.inline_kb import get_events_menu, get_extra_menu, get_events_list_menu, get_events_select_menu, get_event_edit_menu, get_recurrence_menu, get_cancel_keyboard
+from keyboards.inline_kb import get_events_menu, get_extra_menu, get_events_list_menu, get_events_select_menu, get_event_edit_menu, get_recurrence_menu, get_cancel_keyboard, get_chats_select_menu
 from handlers.states import EventState, EditEventState
-from database.events_db import get_all_events, add_event, get_event_by_id, update_event, delete_event, set_greeting_time
+from database.events_db import get_all_events, add_event, get_event_by_id, update_event, delete_event, set_greeting_time, get_event_chats, set_event_chats
 from services.date_utils import get_days_until, format_date_fancy
 import asyncio
 import logging
@@ -401,6 +401,113 @@ async def back_to_edit_menu(callback: types.CallbackQuery):
     except Exception:
         await callback.message.answer("<b>Редактирование события:</b>\n\nВыберите параметр для изменения:", parse_mode="HTML", reply_markup=get_event_edit_menu(event_id))
     await callback.answer()
+
+@router.callback_query(F.data.startswith("ev_edit_chats_"))
+async def start_edit_chats(callback: types.CallbackQuery, state: FSMContext):
+    """Начать редактирование списка чатов для события"""
+    event_id = callback.data.replace("ev_edit_chats_", "")
+    event = await get_event_by_id(event_id)
+    if not event:
+        await callback.answer("Событие не найдено.", show_alert=True)
+        return
+    
+    # Получаем текущие выбранные чаты
+    selected_chats = await get_event_chats(event_id)
+    
+    # Получаем список всех доступных чатов пользователя (из БД или кэша)
+    # Для простоты используем заглушку - в реальном проекте нужно получать из БД
+    available_chats = [
+        {"_id": "chat1", "name": "Личный чат"},
+        {"_id": "chat2", "name": "Семейный чат"},
+        {"_id": "chat3", "name": "Рабочий чат"}
+    ]
+    
+    text = "<b>💬 Выбор чатов для уведомлений:</b>\n\n"
+    text += "Отметьте чаты, в которых будут отображаться уведомления об этом событии:\n\n"
+    if selected_chats:
+        text += f"Выбрано чатов: {len(selected_chats)}\n"
+    else:
+        text += "Чаты не выбраны. Уведомления будут приходить только в личные сообщения.\n"
+    
+    await state.update_data(event_id=event_id, selected_chats=selected_chats.copy())
+    await state.set_state(EditEventState.wait_chats_select)
+    
+    try:
+        msg = await callback.message.edit_text(text, parse_mode="HTML", reply_markup=get_chats_select_menu(event_id, available_chats, selected_chats))
+        await state.update_data(old_message_id=msg.message_id)
+    except Exception:
+        msg = await callback.message.answer(text, parse_mode="HTML", reply_markup=get_chats_select_menu(event_id, available_chats, selected_chats))
+        await state.update_data(old_message_id=msg.message_id)
+    await callback.answer()
+
+@router.callback_query(F.data.startswith("ev_chat_toggle_"))
+async def toggle_chat_selection(callback: types.CallbackQuery, state: FSMContext):
+    """Переключение выбора чата"""
+    # Формат: ev_chat_toggle_EVENTID_CHATID
+    prefix = "ev_chat_toggle_"
+    rest = callback.data[len(prefix):]
+    underscore_pos = rest.rfind("_")
+    if underscore_pos == -1:
+        await callback.answer("Ошибка формата", show_alert=True)
+        return
+    
+    event_id = rest[:underscore_pos]
+    chat_id = rest[underscore_pos + 1:]
+    
+    data = await state.get_data()
+    selected_chats = data.get('selected_chats', [])
+    
+    if chat_id in selected_chats:
+        selected_chats.remove(chat_id)
+    else:
+        selected_chats.append(chat_id)
+    
+    await state.update_data(selected_chats=selected_chats)
+    
+    # Обновляем клавиатуру
+    available_chats = [
+        {"_id": "chat1", "name": "Личный чат"},
+        {"_id": "chat2", "name": "Семейный чат"},
+        {"_id": "chat3", "name": "Рабочий чат"}
+    ]
+    
+    text = "<b>💬 Выбор чатов для уведомлений:</b>\n\n"
+    text += "Отметьте чаты, в которых будут отображаться уведомления об этом событии:\n\n"
+    if selected_chats:
+        text += f"Выбрано чатов: {len(selected_chats)}\n"
+    else:
+        text += "Чаты не выбраны. Уведомления будут приходить только в личные сообщения.\n"
+    
+    try:
+        await callback.message.edit_text(text, parse_mode="HTML", reply_markup=get_chats_select_menu(event_id, available_chats, selected_chats))
+    except Exception:
+        await callback.message.answer(text, parse_mode="HTML", reply_markup=get_chats_select_menu(event_id, available_chats, selected_chats))
+    await callback.answer()
+
+@router.callback_query(F.data.startswith("ev_chats_save_"))
+async def save_chats_selection(callback: types.CallbackQuery, state: FSMContext):
+    """Сохранение выбора чатов"""
+    event_id = callback.data.replace("ev_chats_save_", "")
+    
+    data = await state.get_data()
+    selected_chats = data.get('selected_chats', [])
+    
+    await set_event_chats(event_id, selected_chats)
+    
+    text = f"<b>✅ Чаты сохранены!</b>\n\nВыбрано чатов: {len(selected_chats)}"
+    if selected_chats:
+        text += f"\n\nУведомления будут приходить в выбранные чаты."
+    else:
+        text += "\n\nУведомления будут приходить только в личные сообщения."
+    
+    try:
+        await callback.message.edit_text(text, parse_mode="HTML", reply_markup=get_event_edit_menu(event_id))
+    except Exception:
+        await callback.message.answer(text, parse_mode="HTML", reply_markup=get_event_edit_menu(event_id))
+    
+    await state.clear()
+    await callback.answer()
+
 
 @router.callback_query(F.data == "event_add")
 async def start_add_event(callback: types.CallbackQuery, state: FSMContext):

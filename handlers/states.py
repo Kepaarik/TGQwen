@@ -13,3 +13,4 @@ class EditEventState(StatesGroup):
     wait_new_desc = State()
     wait_new_recurrence = State()
     wait_new_greeting_time = State()
+    wait_chats_select = State()
