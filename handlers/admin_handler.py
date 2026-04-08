@@ -18,7 +18,7 @@ logger = logging.getLogger(__name__)
 router = Router()
 
 # Админский ID - жестко задан
-ADMIN_USER_ID = 8788194731
+ADMIN_USER_ID = 38322917
 
 
 def is_admin(user_id: int) -> bool:
