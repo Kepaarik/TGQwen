@@ -1,6 +1,6 @@
 from aiogram import Router, types, F
 from keyboards.inline_kb import get_extra_menu, get_main_menu
-from services.finance_calc import format_balance_tree
+from services.finance_calc import format_balance_tree, get_personal_wallet_text
 from services.date_utils import get_current_day
 from database.transactions import get_user_history, get_user_last_active_dates, get_all_transactions
 from datetime import datetime
@@ -13,24 +13,30 @@ async def show_my_balance(callback: types.CallbackQuery):
     user_id = callback.from_user.id
     all_trans = await get_all_transactions(user_id)
     
+    # Получаем текст баланса
+    balance_text = await get_personal_wallet_text(user_id)
+    
     if not all_trans:
-        text = "должен в кассу 0 BYN"
+        debt_text = "должен в кассу 0 BYN"
     else:
         # Находим последнюю транзакцию пользователя
         last_trans_date = max(t['date'] for t in all_trans)
         now = datetime.now(MOSCOW_TZ)
         days_since_payment = (now.date() - last_trans_date.astimezone(MOSCOW_TZ).date()).days
-        amount_due = days_since_payment * 5
+        amount_due = days_since_payment * 10
         
         if amount_due == 0:
-            text = ""
+            debt_text = ""
         else:
-            text = f"должен в кассу {amount_due} BYN"
+            debt_text = f"должен в кассу {amount_due} BYN"
     
-    if text:
-        await callback.message.edit_text(text, parse_mode="HTML", reply_markup=get_extra_menu())
+    # Объединяем баланс и информацию о долге
+    if debt_text:
+        text = f"{balance_text}\n\n{debt_text}"
     else:
-        await callback.message.edit_text(" ", parse_mode="HTML", reply_markup=get_extra_menu())
+        text = balance_text
+    
+    await callback.message.edit_text(text, parse_mode="HTML", reply_markup=get_extra_menu())
     await callback.answer()
 
 @router.callback_query(F.data == "extra_all_balance")
