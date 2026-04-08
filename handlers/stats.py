@@ -2,7 +2,7 @@ from aiogram import Router, types, F
 from keyboards.inline_kb import get_extra_menu, get_main_menu
 from services.finance_calc import format_balance_tree
 from services.date_utils import get_current_day
-from database.transactions import get_user_history, get_user_last_active_dates
+from database.transactions import get_user_history, get_user_last_active_dates, get_all_transactions
 from datetime import datetime
 from config import MOSCOW_TZ
 
@@ -10,7 +10,19 @@ router = Router()
 
 @router.callback_query(F.data == "extra_my_balance")
 async def show_my_balance(callback: types.CallbackQuery):
-    text = await format_balance_tree(callback.from_user.id)
+    user_id = callback.from_user.id
+    all_trans = await get_all_transactions(user_id)
+    
+    if not all_trans:
+        text = "должен в кассу 0 BYN"
+    else:
+        # Находим последнюю транзакцию пользователя
+        last_trans_date = max(t['date'] for t in all_trans)
+        now = datetime.now(MOSCOW_TZ)
+        days_since_payment = (now.date() - last_trans_date.astimezone(MOSCOW_TZ).date()).days
+        amount_due = days_since_payment * 5
+        text = f"должен в кассу {amount_due} BYN"
+    
     await callback.message.edit_text(text, parse_mode="HTML", reply_markup=get_extra_menu())
     await callback.answer()
 
