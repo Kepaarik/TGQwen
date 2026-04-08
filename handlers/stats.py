@@ -21,9 +21,16 @@ async def show_my_balance(callback: types.CallbackQuery):
         now = datetime.now(MOSCOW_TZ)
         days_since_payment = (now.date() - last_trans_date.astimezone(MOSCOW_TZ).date()).days
         amount_due = days_since_payment * 5
-        text = f"должен в кассу {amount_due} BYN"
+        
+        if amount_due == 0:
+            text = ""
+        else:
+            text = f"должен в кассу {amount_due} BYN"
     
-    await callback.message.edit_text(text, parse_mode="HTML", reply_markup=get_extra_menu())
+    if text:
+        await callback.message.edit_text(text, parse_mode="HTML", reply_markup=get_extra_menu())
+    else:
+        await callback.message.edit_text(" ", parse_mode="HTML", reply_markup=get_extra_menu())
     await callback.answer()
 
 @router.callback_query(F.data == "extra_all_balance")
