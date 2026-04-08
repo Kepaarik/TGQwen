@@ -7,6 +7,57 @@ from services.date_utils import get_days_until
 
 logger = logging.getLogger(__name__)
 
+# Глобальный список событий для проверки
+scheduled_events = []
+
+async def build_scheduled_events():
+    """
+    Построить массив событий с временем проверки.
+    Вызывается при старте бота и при изменении событий.
+    """
+    global scheduled_events
+    events = await get_all_events()
+    scheduled_events = []
+    
+    now = datetime.now(MOSCOW_TZ)
+    
+    for event in events:
+        date_str = event.get('date_str', '')
+        recurrence = event.get('recurrence', 'нет') or 'нет'
+        user_id = event.get('user_id', '')
+        event_id = str(event.get('_id', ''))
+        
+        # Получаем время отправки поздравления для этого события
+        greeting_time_str = event.get('greeting_time', '09:00')
+        try:
+            greeting_hour, greeting_minute = map(int, greeting_time_str.split(':'))
+            greeting_time = time(hour=greeting_hour, minute=greeting_minute)
+        except:
+            greeting_time = time(hour=9, minute=0)
+        
+        # Создаем объект времени для сегодня
+        scheduled_datetime = datetime.now(MOSCOW_TZ).replace(
+            hour=greeting_hour, 
+            minute=greeting_minute, 
+            second=0, 
+            microsecond=0
+        )
+        
+        # Если время уже прошло сегодня, планируем на завтра
+        if scheduled_datetime <= now:
+            scheduled_datetime += timedelta(days=1)
+        
+        scheduled_events.append({
+            'event': event,
+            'event_id': event_id,
+            'user_id': user_id,
+            'scheduled_time': scheduled_datetime,
+            'greeting_time_str': greeting_time_str
+        })
+    
+    logger.info(f"Построено {len(scheduled_events)} запланированных событий")
+    return scheduled_events
+
 async def check_and_send_greetings(bot):
     """
     Проверяет события и отправляет поздравления если:
@@ -63,10 +114,6 @@ async def check_and_send_greetings(bot):
                 logger.info(f"Найдено событие для поздравления: {event.get('description')} ({date_str}, {recurrence})")
             else:
                 logger.info(f"Событие уже поздравлено сегодня: {event.get('description')}")
-        else:
-            # Событие не сегодня, но всё равно проверяем - возможно нужно обновить время проверки
-            # Не сохраняем время проверки для событий не сегодня
-            pass
     
     # Отправляем поздравления
     for item in today_events:
@@ -181,18 +228,44 @@ async def check_and_send_greetings(bot):
 async def check_events_loop(bot):
     """
     Фоновый цикл проверки событий.
-    Проверяет события каждую минуту и отправляет поздравления только когда:
-    1. Наступило время поздравления для события
-    2. Событие происходит сегодня
-    3. Еще не поздравляли с этим событием сегодня
+    Проверяет события только когда наступает время проверки из расписания.
     """
+    global scheduled_events
+    
     logger.info("Запуск цикла проверки событий...")
+    
+    # Первоначальное построение расписания
+    await build_scheduled_events()
     
     while True:
         try:
-            await check_and_send_greetings(bot)
+            now = datetime.now(MOSCOW_TZ)
+            
+            # Находим ближайшее событие
+            next_check_time = None
+            for scheduled in scheduled_events:
+                sched_time = scheduled['scheduled_time']
+                if sched_time > now:
+                    if next_check_time is None or sched_time < next_check_time:
+                        next_check_time = sched_time
+            
+            if next_check_time:
+                # Ждем до времени следующего события
+                delay = (next_check_time - now).total_seconds()
+                if delay > 0:
+                    logger.info(f"Следующая проверка через {delay:.0f} сек в {next_check_time.strftime('%H:%M')}")
+                    await asyncio.sleep(delay)
+                
+                # Проверяем все события, время которых наступило
+                await check_and_send_greetings(bot)
+                
+                # Перестраиваем расписание после проверки
+                await build_scheduled_events()
+            else:
+                # Если нет будущих событий, ждем 1 минуту и перестраиваем расписание
+                await asyncio.sleep(60)
+                await build_scheduled_events()
+                
         except Exception as e:
             logger.error(f"Ошибка в цикле проверки событий: {e}")
-        
-        # Проверяем каждую минуту
-        await asyncio.sleep(60)
+            await asyncio.sleep(60)

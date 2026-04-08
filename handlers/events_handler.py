@@ -4,6 +4,7 @@ from keyboards.inline_kb import get_events_menu, get_extra_menu, get_events_list
 from handlers.states import EventState, EditEventState
 from database.events_db import get_all_events, add_event, get_event_by_id, update_event, delete_event, set_greeting_time, get_event_chats, set_event_chats, get_user_chats, save_user_chat, get_chat_display_info
 from services.date_utils import get_days_until, format_date_fancy
+from services.event_checker import build_scheduled_events
 import asyncio
 import logging
 
@@ -175,6 +176,13 @@ async def process_new_date(message: types.Message, state: FSMContext):
     
     await update_event(event_id, {"date_str": date_str})
     
+    # Перестраиваем расписание событий после изменения даты
+    try:
+        await build_scheduled_events()
+        logger.info("Расписание событий обновлено после изменения даты события")
+    except Exception as e:
+        logger.warning(f"Не удалось обновить расписание событий: {e}")
+    
     # Возвращаемся к меню редактирования события
     text = f"<b>Дата обновлена!</b>\n\nНовая дата: {date_str}"
     try:
@@ -217,6 +225,13 @@ async def process_new_desc(message: types.Message, state: FSMContext):
         pass
     
     await update_event(event_id, {"description": desc})
+    
+    # Перестраиваем расписание событий после изменения описания (не влияет на время, но для консистентности)
+    try:
+        await build_scheduled_events()
+        logger.info("Расписание событий обновлено после изменения описания события")
+    except Exception as e:
+        logger.warning(f"Не удалось обновить расписание событий: {e}")
     
     # Возвращаемся к меню редактирования события
     text = f"<b>Описание обновлено!</b>\n\nНовое описание: {desc}"
@@ -311,6 +326,13 @@ async def process_new_greeting_time(message: types.Message, state: FSMContext):
     
     await set_greeting_time(event_id, time_str)
     
+    # Перестраиваем расписание событий после изменения времени поздравления
+    try:
+        await build_scheduled_events()
+        logger.info("Расписание событий обновлено после изменения времени поздравления")
+    except Exception as e:
+        logger.warning(f"Не удалось обновить расписание событий: {e}")
+    
     # Обновляем сообщение бота с новым временем
     text = f"<b>Время обновлено!</b>\n\nНовое время: {time_str}"
     try:
@@ -358,6 +380,13 @@ async def set_recurrence(callback: types.CallbackQuery):
     
     rec_value = rec_map.get(rec_type)
     await update_event(event_id, {"recurrence": rec_value})
+    
+    # Перестраиваем расписание событий после изменения периодичности
+    try:
+        await build_scheduled_events()
+        logger.info("Расписание событий обновлено после изменения периодичности события")
+    except Exception as e:
+        logger.warning(f"Не удалось обновить расписание событий: {e}")
     
     rec_text_map = {
         "yearly": "Ежегодно",
@@ -559,6 +588,14 @@ async def process_event_desc(message: types.Message, state: FSMContext):
     
     # Добавляем событие с временем поздравления по умолчанию 09:00
     await add_event(message.from_user.id, message.from_user.first_name, date_str, desc, "yearly", "09:00")
+    
+    # Перестраиваем расписание событий после добавления нового события
+    try:
+        await build_scheduled_events()
+        logger.info("Расписание событий обновлено после добавления нового события")
+    except Exception as e:
+        logger.warning(f"Не удалось обновить расписание событий: {e}")
+    
     await message.answer("Событие успешно добавлено!", reply_markup=get_events_menu())
     await state.clear()
 
@@ -592,6 +629,13 @@ async def process_del_event(callback: types.CallbackQuery):
         
     event_id = callback.data.replace("del_ev_", "")
     await delete_event(event_id)
+    
+    # Перестраиваем расписание событий после удаления события
+    try:
+        await build_scheduled_events()
+        logger.info("Расписание событий обновлено после удаления события")
+    except Exception as e:
+        logger.warning(f"Не удалось обновить расписание событий: {e}")
     
     # Возвращаемся к списку событий для выбора удаления
     evs = await get_all_events()
