@@ -213,10 +213,16 @@ async def admin_broadcast_chats_menu(callback: types.CallbackQuery):
             text += f"{icon} {title} (<code>{chat_id}</code>)\n"
     
     builder = InlineKeyboardBuilder()
-    builder.row(InlineKeyboardButton(text="🔄 Обновить список", callback_data="admin_broadcast_chats"))
     builder.row(InlineKeyboardButton(text="← Назад", callback_data="admin"))
     
-    await callback.message.edit_text(text, reply_markup=builder.as_markup(), parse_mode="HTML")
+    try:
+        await callback.message.edit_text(text, reply_markup=builder.as_markup(), parse_mode="HTML")
+    except Exception as e:
+        if "message is not modified" in str(e):
+            pass
+        else:
+            await callback.message.answer(text, reply_markup=builder.as_markup(), parse_mode="HTML")
+    
     await callback.answer()
 
 
@@ -250,10 +256,16 @@ async def admin_group_bindings_menu(callback: types.CallbackQuery):
     
     builder = InlineKeyboardBuilder()
     builder.row(InlineKeyboardButton(text="➕ Добавить привязку", callback_data="admin_add_binding"))
-    builder.row(InlineKeyboardButton(text="🔄 Обновить список", callback_data="admin_group_bindings"))
     builder.row(InlineKeyboardButton(text="← Назад", callback_data="admin"))
     
-    await callback.message.edit_text(text, reply_markup=builder.as_markup(), parse_mode="HTML")
+    try:
+        await callback.message.edit_text(text, reply_markup=builder.as_markup(), parse_mode="HTML")
+    except Exception as e:
+        if "message is not modified" in str(e):
+            pass
+        else:
+            await callback.message.answer(text, reply_markup=builder.as_markup(), parse_mode="HTML")
+    
     await callback.answer()
 
 
