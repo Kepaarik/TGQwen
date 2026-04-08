@@ -2,7 +2,7 @@ import asyncio
 import logging
 from datetime import datetime, time
 from config import MOSCOW_TZ
-from database.events_db import get_all_events, get_greeting_status, set_greeting_status, clear_old_greeting_statuses, get_greeting_time, get_event_chats, get_user_chats, get_chat_display_info
+from database.events_db import get_all_events, get_greeting_status, set_greeting_status, clear_old_greeting_statuses, get_greeting_time, get_event_chats, get_user_chats, get_chat_display_info, set_event_last_check_time
 from services.date_utils import get_days_until
 
 logger = logging.getLogger(__name__)
@@ -17,6 +17,7 @@ async def check_and_send_greetings(bot):
     now = datetime.now(MOSCOW_TZ)
     current_time = now.time()
     current_date_str = now.strftime("%d.%m")
+    current_datetime_str = now.strftime("%d.%m %H:%M")
     
     logger.info(f"Начинаю проверку событий на {current_date_str} в {current_time}")
     
@@ -28,6 +29,9 @@ async def check_and_send_greetings(bot):
         recurrence = event.get('recurrence', 'нет') or 'нет'
         user_id = event.get('user_id', '')
         event_id = str(event.get('_id', ''))
+        
+        # Сохраняем время проверки для этого события
+        await set_event_last_check_time(event_id, current_datetime_str)
         
         # Проверяем, является ли событие "сегодняшним"
         days_info = get_days_until(date_str, recurrence)

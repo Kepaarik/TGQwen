@@ -7,7 +7,7 @@ from keyboards.inline_kb import get_cancel_keyboard
 from database.events_db import (
     get_all_events, get_event_by_id, update_event, set_greeting_time,
     get_event_chats, set_event_chats, get_user_chats, get_chat_display_info,
-    chats_col
+    chats_col, get_event_last_check_time
 )
 from config import ADMIN_ID
 import logging
@@ -80,7 +80,9 @@ async def admin_event_time_menu(callback: types.CallbackQuery):
     else:
         for event in events[:10]:
             current_time = event.get('greeting_time', '09:00')
-            text += f"• {event['description'][:30]} - {current_time}\n"
+            last_check = event.get('last_check_time', 'Не проверялось')
+            text += f"• {event['description'][:30]}\n"
+            text += f"  Время поздравления: {current_time} | Последняя проверка: {last_check}\n"
 
     builder = InlineKeyboardBuilder()
     for event in events[:10]:
@@ -116,6 +118,7 @@ async def admin_edit_event_time(callback: types.CallbackQuery, state: FSMContext
         return
 
     current_time = event.get('greeting_time', '09:00')
+    last_check = event.get('last_check_time', 'Не проверялось')
 
     await state.update_data(event_id=event_id, old_message_id=callback.message.message_id)
     await state.set_state(AdminStates.wait_new_time)
@@ -123,7 +126,8 @@ async def admin_edit_event_time(callback: types.CallbackQuery, state: FSMContext
     text = (
         f"<b>Редактирование времени события:</b>\n\n"
         f"Событие: {event['description']}\n"
-        f"Текущее время: {current_time}\n\n"
+        f"Текущее время поздравления: {current_time}\n"
+        f"Последняя проверка: {last_check}\n\n"
         f"Введите новое время в формате ЧЧ:ММ (например, 08:30 или 14:00):"
     )
 
