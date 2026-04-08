@@ -42,6 +42,34 @@ class AdminStates(StatesGroup):
     wait_group_binding_id = State()
 
 
+@router.callback_query(F.data == "admin")
+async def admin_back_menu(callback: types.CallbackQuery):
+    """Возврат в главное меню админ панели"""
+    if not await check_admin_access(callback):
+        await callback.answer()
+        return
+
+    builder = InlineKeyboardBuilder()
+    builder.row(InlineKeyboardButton(text="⏰ Настройка времени событий", callback_data="admin_event_time"))
+    builder.row(InlineKeyboardButton(text="💬 Управление чатами для рассылок", callback_data="admin_broadcast_chats"))
+    builder.row(InlineKeyboardButton(text="📋 Привязка ID групп к именам", callback_data="admin_group_bindings"))
+    builder.row(InlineKeyboardButton(text="📨 Отправить сообщение", callback_data="admin_send_message"))
+    builder.row(InlineKeyboardButton(text="✕ Закрыть", callback_data="menu_close"))
+
+    try:
+        await callback.message.edit_text(
+            "<b>🛡️ Админ панель</b>\n\nВыберите действие:",
+            reply_markup=builder.as_markup(),
+            parse_mode="HTML"
+        )
+    except TelegramBadRequest as e:
+        if "message is not modified" in str(e):
+            await callback.answer()
+        else:
+            raise
+    await callback.answer()
+
+
 @router.message(Command("admin"))
 async def cmd_admin(message: types.Message):
     """Главное меню админ панели"""
