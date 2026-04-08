@@ -1,14 +1,12 @@
 import asyncio
 import logging
 import os
-import random
 import signal
 from aiogram import Bot, Dispatcher
 from aiogram.fsm.storage.memory import MemoryStorage
 from aiogram.client.default import DefaultBotProperties
 from aiogram.enums import ParseMode
 from aiohttp import web
-import aiohttp
 
 from config import BOT_TOKEN, PORT
 from handlers import common, transactions, stats, events_handler
@@ -17,9 +15,6 @@ from services.event_checker import check_events_loop
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
-
-# URL вашего сервиса на Render (задаётся через переменную окружения RENDER_URL)
-RENDER_URL = os.getenv("RENDER_URL", "")
 
 # Флаг для остановки фоновых задач
 shutdown_flag = False
@@ -41,24 +36,6 @@ async def start_fake_server():
     await site.start()
     logger.info(f"Fake server started on port {PORT}")
 
-async def keep_alive():
-    """Пингует собственный URL каждые 1-5 секунд (случайно), чтобы Render не усыплял сервис."""
-    if not RENDER_URL:
-        logger.warning("RENDER_URL не задан — keep-alive отключён.")
-        return
-    logger.info(f"Keep-alive запущен, пингуем {RENDER_URL} каждые 1-5 сек (случайно).")
-    while not shutdown_flag:
-        delay = random.uniform(1, 5)
-        await asyncio.sleep(delay)
-        if shutdown_flag:
-            break
-        try:
-            async with aiohttp.ClientSession() as session:
-                async with session.get(RENDER_URL, timeout=aiohttp.ClientTimeout(total=10)) as resp:
-                    logger.info(f"Keep-alive ping: {resp.status}")
-        except Exception as e:
-            logger.warning(f"Keep-alive ошибка: {e}")
-
 async def main():
     bot = Bot(token=BOT_TOKEN, default=DefaultBotProperties(parse_mode=ParseMode.HTML))
     dp = Dispatcher(storage=MemoryStorage())
@@ -74,7 +51,6 @@ async def main():
 
     # Background tasks
     server_task = asyncio.create_task(start_fake_server())
-    keepalive_task = asyncio.create_task(keep_alive())
     rates_task = asyncio.create_task(refresh_rates_loop())
     events_check_task = asyncio.create_task(check_events_loop(bot))
     
@@ -86,7 +62,7 @@ async def main():
         global shutdown_flag
         shutdown_flag = True
         # Отменяем фоновые задачи
-        for task in [server_task, keepalive_task, rates_task, events_check_task]:
+        for task in [server_task, rates_task, events_check_task]:
             if not task.done():
                 task.cancel()
                 try:
