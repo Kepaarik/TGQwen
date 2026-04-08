@@ -9,7 +9,7 @@ from aiogram.enums import ParseMode
 from aiohttp import web
 
 from config import BOT_TOKEN, PORT
-from handlers import common, transactions, stats, events_handler
+from handlers import common, transactions, stats, events_handler, admin_handler
 from services.exchange_rates import refresh_rates_loop
 from services.event_checker import check_events_loop
 
@@ -48,6 +48,7 @@ async def main():
     dp.include_router(transactions.router)
     dp.include_router(stats.router)
     dp.include_router(events_handler.router)
+    dp.include_router(admin_handler.router)
 
     # Background tasks
     server_task = asyncio.create_task(start_fake_server())
