@@ -1,6 +1,6 @@
 from datetime import datetime, time
 from config import MOSCOW_TZ
-from database.connection import events_col, settings_col
+from database.connection import events_col, settings_col, chats_col
 from bson import ObjectId
 
 async def get_all_events():
@@ -121,3 +121,45 @@ async def clear_old_greeting_statuses(user_id: str, current_date_str: str):
         "user_id": str(user_id),
         "date_str": {"$ne": current_date_str}
     })
+
+async def save_user_chat(user_id: int, chat_id: str, chat_type: str, title: str = None, username: str = None):
+    """Сохранить информацию о чате, в котором находится пользователь"""
+    chat_doc = {
+        "user_id": str(user_id),
+        "chat_id": chat_id,
+        "chat_type": chat_type,
+        "title": title,
+        "username": username,
+        "updated_at": datetime.now(MOSCOW_TZ)
+    }
+    await chats_col.update_one(
+        {"user_id": str(user_id), "chat_id": chat_id},
+        {"$set": chat_doc},
+        upsert=True
+    )
+
+async def get_user_chats(user_id: int) -> list:
+    """Получить все чаты пользователя, в которые бот может писать"""
+    cursor = chats_col.find({"user_id": str(user_id)}).sort("updated_at", -1)
+    return await cursor.to_list(length=100)
+
+async def remove_user_chat(user_id: int, chat_id: str):
+    """Удалить чат из списка чатов пользователя"""
+    await chats_col.delete_one({"user_id": str(user_id), "chat_id": chat_id})
+
+async def get_chat_display_info(chat_id: str, chat_type: str, title: str = None, username: str = None) -> str:
+    """Получить отображаемое имя для чата"""
+    if chat_type == "private":
+        # Для личного чата используем username или имя пользователя
+        if username:
+            return f"@{username}"
+        elif title:
+            return title
+        else:
+            return f"Личный чат ({chat_id})"
+    else:
+        # Для групп используем название группы или ID
+        if title:
+            return title
+        else:
+            return f"Группа ({chat_id})"
