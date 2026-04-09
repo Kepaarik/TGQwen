@@ -1,10 +1,11 @@
 import asyncio
 import httpx
 import logging
+from datetime import datetime, timedelta
 
 logger = logging.getLogger(__name__)
 
-# Кеш курсов — обновляется в фоне раз в час
+# Кеш курсов — обновляется в фоне раз в день в 01:00
 _cached_rates = None
 
 def get_cached_rates():
@@ -60,13 +61,34 @@ async def _fetch_rates():
     return None
 
 async def refresh_rates_loop():
-    """Фоновая задача: обновляет кеш курсов при старте и затем каждый час."""
+    """Фоновая задача: обновляет кеш курсов при старте и затем каждый день в 01:00."""
     global _cached_rates
+    
+    # Первое обновление при старте
+    new_rates = await _fetch_rates()
+    if new_rates:
+        _cached_rates = new_rates
+        logger.info("Кеш курсов обновлён при старте.")
+    else:
+        logger.warning("Не удалось обновить курсы при старте.")
+    
     while True:
+        # Вычисляем время до следующего обновления в 01:00
+        now = datetime.now()
+        next_update = now.replace(hour=1, minute=0, second=0, microsecond=0)
+        
+        # Если 01:00 уже прошло сегодня, планируем на завтра
+        if now >= next_update:
+            next_update += timedelta(days=1)
+        
+        delay = (next_update - now).total_seconds()
+        logger.info(f"Следующее обновление курсов в {next_update.strftime('%Y-%m-%d %H:%M:%S')} (через {delay:.0f} секунд)")
+        
+        await asyncio.sleep(delay)
+        
         new_rates = await _fetch_rates()
         if new_rates:
             _cached_rates = new_rates
             logger.info("Кеш курсов обновлён.")
         else:
             logger.warning("Не удалось обновить курсы, используем старый кеш.")
-        await asyncio.sleep(3600)  # 1 час
