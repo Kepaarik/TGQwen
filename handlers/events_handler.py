@@ -183,11 +183,21 @@ async def process_new_date(message: types.Message, state: FSMContext):
     except Exception as e:
         logger.warning(f"Не удалось обновить расписание событий: {e}")
     
-    # Возвращаемся к меню редактирования события
+    # Редактируем старое сообщение вместо отправки нового
     text = f"<b>Дата обновлена!</b>\n\nНовая дата: {date_str}"
     try:
-        await message.answer(text, parse_mode="HTML", reply_markup=get_event_edit_menu(event_id))
-    except Exception:
+        if old_message_id:
+            await message.bot.edit_message_text(
+                chat_id=message.chat.id,
+                message_id=old_message_id,
+                text=text,
+                parse_mode="HTML",
+                reply_markup=get_event_edit_menu(event_id)
+            )
+        else:
+            await message.answer(text, parse_mode="HTML", reply_markup=get_event_edit_menu(event_id))
+    except Exception as e:
+        logger.warning(f"Не удалось обновить сообщение бота: {e}")
         await message.answer(text, parse_mode="HTML", reply_markup=get_event_edit_menu(event_id))
     await state.clear()
 
@@ -217,6 +227,7 @@ async def process_new_desc(message: types.Message, state: FSMContext):
     desc = message.text.strip()
     data = await state.get_data()
     event_id = data['event_id']
+    old_message_id = data.get('old_message_id')
     
     # Удаляем сообщение пользователя
     try:
@@ -233,11 +244,21 @@ async def process_new_desc(message: types.Message, state: FSMContext):
     except Exception as e:
         logger.warning(f"Не удалось обновить расписание событий: {e}")
     
-    # Возвращаемся к меню редактирования события
+    # Редактируем старое сообщение вместо отправки нового
     text = f"<b>Описание обновлено!</b>\n\nНовое описание: {desc}"
     try:
-        await message.answer(text, parse_mode="HTML", reply_markup=get_event_edit_menu(event_id))
-    except Exception:
+        if old_message_id:
+            await message.bot.edit_message_text(
+                chat_id=message.chat.id,
+                message_id=old_message_id,
+                text=text,
+                parse_mode="HTML",
+                reply_markup=get_event_edit_menu(event_id)
+            )
+        else:
+            await message.answer(text, parse_mode="HTML", reply_markup=get_event_edit_menu(event_id))
+    except Exception as e:
+        logger.warning(f"Не удалось обновить сообщение бота: {e}")
         await message.answer(text, parse_mode="HTML", reply_markup=get_event_edit_menu(event_id))
     await state.clear()
 
