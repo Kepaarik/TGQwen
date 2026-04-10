@@ -158,6 +158,11 @@ async def get_user_chats(user_id: int) -> list:
     cursor = chats_col.find({"user_id": str(user_id)}).sort("updated_at", -1)
     return await cursor.to_list(length=100)
 
+async def get_all_chats() -> list:
+    """Получить все чаты из базы данных (группы и пользователи)"""
+    cursor = chats_col.find().sort("updated_at", -1)
+    return await cursor.to_list(length=200)
+
 async def remove_user_chat(user_id: int, chat_id: str):
     """Удалить чат из списка чатов пользователя"""
     await chats_col.delete_one({"user_id": str(user_id), "chat_id": chat_id})
