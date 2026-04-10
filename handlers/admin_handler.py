@@ -55,6 +55,7 @@ async def admin_back_menu(callback: types.CallbackQuery):
     builder = InlineKeyboardBuilder()
     builder.row(InlineKeyboardButton(text="⏰ Настройка времени событий", callback_data="admin_event_time"))
     builder.row(InlineKeyboardButton(text="📅 Расписание проверок", callback_data="admin_schedule_info"))
+    builder.row(InlineKeyboardButton(text="🔄 Внеплановая проверка", callback_data="admin_force_check"))
     builder.row(InlineKeyboardButton(text="💬 Управление чатами для рассылок", callback_data="admin_broadcast_chats"))
     builder.row(InlineKeyboardButton(text="👤 Добавить пользователя для рассылки", callback_data="admin_add_broadcast_user"))
     builder.row(InlineKeyboardButton(text="📋 Привязка ID групп к именам", callback_data="admin_group_bindings"))
@@ -85,6 +86,7 @@ async def cmd_admin(message: types.Message):
     builder = InlineKeyboardBuilder()
     builder.row(InlineKeyboardButton(text="⏰ Настройка времени событий", callback_data="admin_event_time"))
     builder.row(InlineKeyboardButton(text="📅 Расписание проверок", callback_data="admin_schedule_info"))
+    builder.row(InlineKeyboardButton(text="🔄 Внеплановая проверка", callback_data="admin_force_check"))
     builder.row(InlineKeyboardButton(text="💬 Управление чатами для рассылок", callback_data="admin_broadcast_chats"))
     builder.row(InlineKeyboardButton(text="👤 Добавить пользователя для рассылки", callback_data="admin_add_broadcast_user"))
     builder.row(InlineKeyboardButton(text="📋 Привязка ID групп к именам", callback_data="admin_group_bindings"))
@@ -282,6 +284,41 @@ async def admin_schedule_info_menu(callback: types.CallbackQuery):
             await callback.answer()
         else:
             raise
+    await callback.answer()
+
+
+# ==================== ВНЕПЛАНОВАЯ ПРОВЕРКА ====================
+
+@router.callback_query(F.data == "admin_force_check")
+async def admin_force_check_menu(callback: types.CallbackQuery):
+    """Внеплановая проверка событий"""
+    if not await check_admin_access(callback):
+        await callback.answer()
+        return
+
+    try:
+        from services.event_checker import check_and_send_greetings
+        await check_and_send_greetings(callback.message.bot)
+        logger.info("Проведена внеплановая проверка событий по запросу админа")
+        
+        text = "<b>✅ Внеплановая проверка выполнена!</b>\n\nСобытия были проверены и поздравления отправлены при необходимости."
+        
+        builder = InlineKeyboardBuilder()
+        builder.row(InlineKeyboardButton(text="← Назад", callback_data="admin"))
+        
+        try:
+            await callback.message.edit_text(text, reply_markup=builder.as_markup(), parse_mode="HTML")
+        except TelegramBadRequest as e:
+            if "message is not modified" in str(e):
+                await callback.answer()
+            else:
+                raise
+        except Exception:
+            await callback.message.answer(text, reply_markup=builder.as_markup(), parse_mode="HTML")
+    except Exception as e:
+        logger.error(f"Ошибка при внеплановой проверке: {e}")
+        await callback.answer(f"Ошибка: {e}", show_alert=True)
+    
     await callback.answer()
 
 
