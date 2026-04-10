@@ -206,6 +206,14 @@ async def process_admin_new_time(message: types.Message, state: FSMContext):
 
     await set_greeting_time(event_id, time_str)
 
+    # Перестраиваем расписание событий после изменения времени поздравления
+    try:
+        from services.event_checker import build_scheduled_events
+        await build_scheduled_events()
+        logger.info("Расписание событий обновлено после изменения времени поздравления")
+    except Exception as e:
+        logger.warning(f"Не удалось обновить расписание событий: {e}")
+
     # Редактируем старое сообщение вместо отправки нового
     text = f"<b>✅ Время обновлено!</b>\n\nНовое время: {time_str}"
     try:

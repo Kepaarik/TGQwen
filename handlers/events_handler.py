@@ -2,7 +2,7 @@ from aiogram import Router, types, F
 from aiogram.fsm.context import FSMContext
 from keyboards.inline_kb import get_events_menu, get_extra_menu, get_events_list_menu, get_events_select_menu, get_event_edit_menu, get_recurrence_menu, get_cancel_keyboard, get_chats_select_menu
 from handlers.states import EventState, EditEventState
-from database.events_db import get_all_events, add_event, get_event_by_id, update_event, delete_event, set_greeting_time, get_event_chats, set_event_chats, get_user_chats, save_user_chat, get_chat_display_info
+from database.events_db import get_all_events, add_event, get_event_by_id, update_event, delete_event, set_greeting_time, get_event_chats, set_event_chats, get_user_chats, save_user_chat, get_chat_display_info, get_all_chats
 from services.date_utils import get_days_until, format_date_fancy
 from services.event_checker import build_scheduled_events
 import asyncio
@@ -464,12 +464,12 @@ async def start_edit_chats(callback: types.CallbackQuery, state: FSMContext):
     # Получаем текущие выбранные чаты
     selected_chats = await get_event_chats(event_id)
     
-    # Получаем список всех доступных чатов пользователя из БД
-    user_chats = await get_user_chats(callback.from_user.id)
+    # Получаем список всех доступных чатов из БД (группы и пользователи добавленные в админке)
+    all_chats = await get_all_chats()
     
     # Формируем список доступных чатов с отображаемыми именами
     available_chats = []
-    for chat in user_chats:
+    for chat in all_chats:
         chat_id = str(chat.get('chat_id', ''))
         display_name = await get_chat_display_info(
             chat_id=chat_id,
@@ -528,9 +528,9 @@ async def toggle_chat_selection(callback: types.CallbackQuery, state: FSMContext
     await state.update_data(selected_chats=selected_chats)
     
     # Получаем список доступных чатов для обновления клавиатуры
-    user_chats = await get_user_chats(callback.from_user.id)
+    all_chats = await get_all_chats()
     available_chats = []
-    for chat in user_chats:
+    for chat in all_chats:
         chat_id_iter = str(chat.get('chat_id', ''))
         display_name = await get_chat_display_info(
             chat_id=chat_id_iter,
