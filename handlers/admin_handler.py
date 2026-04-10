@@ -197,6 +197,7 @@ async def process_admin_new_time(message: types.Message, state: FSMContext):
 
     data = await state.get_data()
     event_id = data['event_id']
+    old_message_id = data.get('old_message_id')
 
     try:
         await message.delete()
@@ -205,8 +206,22 @@ async def process_admin_new_time(message: types.Message, state: FSMContext):
 
     await set_greeting_time(event_id, time_str)
 
+    # Редактируем старое сообщение вместо отправки нового
     text = f"<b>✅ Время обновлено!</b>\n\nНовое время: {time_str}"
-    await message.answer(text, parse_mode="HTML", reply_markup=get_cancel_keyboard("admin_event_time"))
+    try:
+        if old_message_id:
+            await message.bot.edit_message_text(
+                chat_id=message.chat.id,
+                message_id=old_message_id,
+                text=text,
+                parse_mode="HTML",
+                reply_markup=get_cancel_keyboard("admin_event_time")
+            )
+        else:
+            await message.answer(text, parse_mode="HTML", reply_markup=get_cancel_keyboard("admin_event_time"))
+    except Exception as e:
+        logger.warning(f"Не удалось обновить сообщение бота: {e}")
+        await message.answer(text, parse_mode="HTML", reply_markup=get_cancel_keyboard("admin_event_time"))
     await state.clear()
 
 
@@ -354,6 +369,7 @@ async def process_user_name_for_broadcast(message: types.Message, state: FSMCont
     user_name = message.text.strip()
     data = await state.get_data()
     user_id = data.get('broadcast_user_id')
+    old_message_id = data.get('old_message_id')
 
     if not user_id:
         await message.answer("Ошибка: ID пользователя не найден. Начните сначала.")
@@ -375,7 +391,21 @@ async def process_user_name_for_broadcast(message: types.Message, state: FSMCont
         text += f"Имя: {user_name}\n"
         text += f"ID: <code>{user_id}</code>"
 
-        await message.answer(text, parse_mode="HTML", reply_markup=get_cancel_keyboard("admin"))
+        # Редактируем старое сообщение вместо отправки нового
+        try:
+            if old_message_id:
+                await message.bot.edit_message_text(
+                    chat_id=message.chat.id,
+                    message_id=old_message_id,
+                    text=text,
+                    parse_mode="HTML",
+                    reply_markup=get_cancel_keyboard("admin")
+                )
+            else:
+                await message.answer(text, parse_mode="HTML", reply_markup=get_cancel_keyboard("admin"))
+        except Exception as e:
+            logger.warning(f"Не удалось обновить сообщение бота: {e}")
+            await message.answer(text, parse_mode="HTML", reply_markup=get_cancel_keyboard("admin"))
     except Exception as e:
         logger.error(f"Ошибка при сохранении пользователя для рассылки: {e}")
         await message.answer(f"Ошибка при сохранении: {e}")
@@ -481,6 +511,7 @@ async def process_group_binding_name(message: types.Message, state: FSMContext):
     group_name = message.text.strip()
     data = await state.get_data()
     chat_id = data.get('group_chat_id')
+    old_message_id = data.get('old_message_id')
 
     if not chat_id:
         await message.answer("Ошибка: ID группы не найден. Начните сначала.")
@@ -505,7 +536,21 @@ async def process_group_binding_name(message: types.Message, state: FSMContext):
         text += f"Группа: {group_name}\n"
         text += f"ID: <code>{chat_id}</code>"
 
-        await message.answer(text, parse_mode="HTML", reply_markup=get_cancel_keyboard("admin_group_bindings"))
+        # Редактируем старое сообщение вместо отправки нового
+        try:
+            if old_message_id:
+                await message.bot.edit_message_text(
+                    chat_id=message.chat.id,
+                    message_id=old_message_id,
+                    text=text,
+                    parse_mode="HTML",
+                    reply_markup=get_cancel_keyboard("admin_group_bindings")
+                )
+            else:
+                await message.answer(text, parse_mode="HTML", reply_markup=get_cancel_keyboard("admin_group_bindings"))
+        except Exception as e:
+            logger.warning(f"Не удалось обновить сообщение бота: {e}")
+            await message.answer(text, parse_mode="HTML", reply_markup=get_cancel_keyboard("admin_group_bindings"))
     except Exception as e:
         logger.error(f"Ошибка при сохранении привязки: {e}")
         await message.answer(f"Ошибка при сохранении: {e}")
