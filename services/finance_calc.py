@@ -65,10 +65,11 @@ async def format_balance_tree(user_id=None):
                     lines.append(f"  ┗ BYN: <code>{val:,.2f}</code> Br")
                 else:
                     r = rates.get(cur, 0)
+                    byn_equiv = val * r
                     if cur == "CNY":
-                        lines.append(f"  ┗ {cur}: <code>{val:,.2f}</code> {symbol} (10{symbol}={r*10:.2f}Br)")
+                        lines.append(f"  ┗ {cur}: <code>{val:,.2f}</code> {symbol} (~{byn_equiv:.2f}Br)")
                     else:
-                        lines.append(f"  ┗ {cur}: <code>{val:,.2f}</code> {symbol} (1{symbol}={r:.2f}Br)")
+                        lines.append(f"  ┗ {cur}: <code>{val:,.2f}</code> {symbol} (~{byn_equiv:.2f}Br)")
     
     lines.append(f"\n<b>Итого:</b> <code>{total_all_byn:,.2f} BYN</code>")
     return "\n".join(lines)
