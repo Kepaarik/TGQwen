@@ -75,7 +75,7 @@ async def format_balance_tree(user_id=None):
     return "\n".join(lines)
 
 async def format_single_user_balance(user_id: int):
-    """Форматирует баланс одного пользователя в стиле 'баланс всех' с приблизительной суммой"""
+    """Форматирует баланс одного пользователя в стиле 'баланс всех' с курсами и приблизительной суммой"""
     all_trans = await get_all_transactions(user_id)
     if not all_trans: 
         return "Данных нет."
@@ -97,7 +97,9 @@ async def format_single_user_balance(user_id: int):
         user_data["bals"][cur] = user_data["bals"].get(cur, 0) + amt
         total_byn += amt if cur == "BYN" else amt * rates.get(cur, 0)
 
-    lines = []
+    # Добавляем строку с курсами валют как в "Баланс всех"
+    header = f"Курсы: USD($): {rates['USD']:.3f}, EUR(€): {rates['EUR']:.3f}, CNY(¥): {rates['CNY']:.3f}\n"
+    lines = [header]
     
     active = {k: v for k, v in user_data["bals"].items() if round(v, 2) != 0}
     if active:
@@ -108,7 +110,9 @@ async def format_single_user_balance(user_id: int):
             if cur == "BYN":
                 lines.append(f"  ┗ BYN: <code>{val:,.2f}</code> Br")
             else:
-                lines.append(f"  ┗ {cur}: <code>{val:,.2f}</code> {symbol}")
+                r = rates.get(cur, 0)
+                byn_equiv = val * r
+                lines.append(f"  ┗ {cur}: <code>{val:,.2f}</code> {symbol} (~{byn_equiv:.2f}Br)")
     
     lines.append(f"\n<b>Итого:</b> <code>{total_byn:,.2f} BYN</code>")
     return "\n".join(lines)
