@@ -72,3 +72,46 @@ async def format_balance_tree(user_id=None):
     
     lines.append(f"\n<b>Итого:</b> <code>{total_all_byn:,.2f} BYN</code>")
     return "\n".join(lines)
+
+async def format_single_user_balance(user_id: int):
+    """Форматирует баланс одного пользователя в стиле 'баланс всех' с приблизительной суммой"""
+    all_trans = await get_all_transactions(user_id)
+    if not all_trans: 
+        return "Данных нет."
+    
+    rates = get_cached_rates()
+    if not rates: 
+        return "Курсы ещё загружаются, попробуйте через пару секунд."
+
+    # Собираем данные по пользователю
+    user_data = {"name": "", "bals": {}}
+    total_byn = 0.0
+
+    for t in all_trans:
+        uid = t["user_id"]
+        if not user_data["name"]:
+            user_data["name"] = t.get("user_name", "User")
+        
+        cur, amt = t["currency"], t["amount"]
+        user_data["bals"][cur] = user_data["bals"].get(cur, 0) + amt
+        total_byn += amt if cur == "BYN" else amt * rates.get(cur, 0)
+
+    lines = []
+    
+    active = {k: v for k, v in user_data["bals"].items() if round(v, 2) != 0}
+    if active:
+        lines.append(f"<b>{user_data['name']}</b>")
+        for cur in sorted(active.keys()):
+            val = active[cur]
+            symbol = CURRENCY_SYMBOLS.get(cur, cur)
+            if cur == "BYN":
+                lines.append(f"  ┗ BYN: <code>{val:,.2f}</code> Br")
+            else:
+                r = rates.get(cur, 0)
+                if cur == "CNY":
+                    lines.append(f"  ┗ {cur}: <code>{val:,.2f}</code> {symbol} (10{symbol}={r*10:.2f}Br)")
+                else:
+                    lines.append(f"  ┗ {cur}: <code>{val:,.2f}</code> {symbol} (1{symbol}={r:.2f}Br)")
+    
+    lines.append(f"\n<b>Итого:</b> <code>{total_byn:,.2f} BYN</code>")
+    return "\n".join(lines)

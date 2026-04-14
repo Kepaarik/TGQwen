@@ -1,6 +1,6 @@
 from aiogram import Router, types, F
 from keyboards.inline_kb import get_extra_menu, get_main_menu
-from services.finance_calc import format_balance_tree, get_personal_wallet_text
+from services.finance_calc import format_balance_tree, get_personal_wallet_text, format_single_user_balance
 from services.date_utils import get_current_day
 from database.transactions import get_user_history, get_user_last_active_dates, get_all_transactions
 from datetime import datetime
@@ -13,8 +13,8 @@ async def show_my_balance(callback: types.CallbackQuery):
     user_id = callback.from_user.id
     all_trans = await get_all_transactions(user_id)
     
-    # Получаем текст баланса
-    balance_text = await get_personal_wallet_text(user_id)
+    # Получаем текст баланса в формате "баланс всех" с приблизительной суммой
+    balance_text = await format_single_user_balance(user_id)
     
     if not all_trans:
         debt_text = "должен в кассу 0 BYN"
