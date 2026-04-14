@@ -107,11 +107,7 @@ async def format_single_user_balance(user_id: int):
             if cur == "BYN":
                 lines.append(f"  ┗ BYN: <code>{val:,.2f}</code> Br")
             else:
-                r = rates.get(cur, 0)
-                if cur == "CNY":
-                    lines.append(f"  ┗ {cur}: <code>{val:,.2f}</code> {symbol} (10{symbol}={r*10:.2f}Br)")
-                else:
-                    lines.append(f"  ┗ {cur}: <code>{val:,.2f}</code> {symbol} (1{symbol}={r:.2f}Br)")
+                lines.append(f"  ┗ {cur}: <code>{val:,.2f}</code> {symbol}")
     
     lines.append(f"\n<b>Итого:</b> <code>{total_byn:,.2f} BYN</code>")
     return "\n".join(lines)
